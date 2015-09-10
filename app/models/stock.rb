@@ -59,7 +59,7 @@ class Stock < ActiveRecord::Base
           topest_price = ((values[4].to_f)*100).to_i
           # 今日最低
           lowest_price = ((values[5].to_f)*100).to_i
-          if stock.ten_years_low.to_i > lowest_price
+          if stock.tgiten_years_low.to_i > lowest_price
             stock.ten_years_low = lowest_price
           end
 
