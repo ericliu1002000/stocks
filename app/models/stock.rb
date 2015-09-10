@@ -47,7 +47,7 @@ class Stock < ActiveRecord::Base
           stock_info.gsub!('var ', '')
           stock_info.gsub!('\n', '')
           next if stock_info.blank?
-          split_stock_info  = stock_info.split('=')
+          split_stock_info = stock_info.split('=')
           values = split_stock_info[1]
           title = split_stock_info[0]
           next if values.blank?
@@ -73,6 +73,31 @@ class Stock < ActiveRecord::Base
       end
     end
   end
+
+
+  def self.common_query options
+    stocks = Stock.all
+    stocks = stocks.where(code: options[:code]) unless options[:code].blank?
+    stocks = stocks.where(name: options[:name]) unless options[:name].blank?
+    stocks = stocks.where(status: options[:status]) unless options[:status].blank?
+    stocks = stocks.where(city_name: options[:city_name]) unless options[:city_name].blank?
+
+    stocks = stocks.where("current_price >= ?", options[:low_current_price]) unless options[:low_current_price].blank?
+    stocks = stocks.where("current_price <= ?", options[:high_current_price]) unless options[:high_current_price].blank?
+
+    stocks = stocks.where("ten_years_top >= ?", options[:low_ten_years_top]) unless options[:low_ten_years_top].blank?
+    stocks = stocks.where("ten_years_top <= ?", options[:high_ten_years_top]) unless options[:high_ten_years_top].blank?
+
+    stocks = stocks.where("ten_years_low >= ?", options[:low_ten_years_low]) unless options[:low_ten_years_low].blank?
+    stocks = stocks.where("ten_years_low <= ?", options[:high_ten_years_low]) unless options[:high_ten_years_low].blank?
+
+    stocks = stocks.where("buy_price >= ?", options[:low_buy_price]) unless options[:low_buy_price].blank?
+    stocks = stocks.where("buy_price <= ?", options[:high_buy_price]) unless options[:high_buy_price].blank?
+
+    stocks
+  end
+
+
 end
 
 
