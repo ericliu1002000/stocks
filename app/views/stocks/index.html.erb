@@ -1,6 +1,6 @@
 <h2>股票</h2>
 <br/>
-<%= form_tag '/stocks' do %>
+<%= form_tag '/stocks', method: :get do %>
 <label>股票代码:</label><%= text_field_tag :code, params[:code] %><br/>
 <label>股票名称:</label><%= text_field_tag :name, params[:name] %><br/>
 <label>价格区间:</label><%= text_field_tag :low_current_price, params[:low_current_price] %><当前价格<<%= text_field_tag :high_current_price, params[:high_current_price]  %><br/>
@@ -23,7 +23,7 @@
   <th>沪/深</th>
   <th>操作</th>
   </thead>
-  <%= @stocks.each do |stock| %>
+  <% @stocks.each do |stock| %>
     <tr>
       <td><%= stock.code %></td>
       <td><%= stock.name %></td>
@@ -33,7 +33,7 @@
       <td><%= stock.buy_price %></td>
       <td><%= stock.status %></td>
       <td><%= stock.city_name %></td>
-      <td><%= link_to '修改', "/stocks/#{stock.id}/edit" %></td>
+      <td><%= link_to '修改', "/stocks/#{stock.id}/edit", target: "_blank" %></td>
     </tr>
   <% end %>
 </table>
