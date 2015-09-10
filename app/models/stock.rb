@@ -100,7 +100,6 @@ class Stock < ActiveRecord::Base
 
 end
 
-
 __END__
 
 
