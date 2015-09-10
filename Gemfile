@@ -40,3 +40,5 @@ gem 'devise'
 # Use debugger
 # gem 'debugger', group: [:development, :test]
 
+# 分页
+gem 'will_paginate', '~> 3.0'

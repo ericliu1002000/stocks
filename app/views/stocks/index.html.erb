@@ -1,0 +1,41 @@
+<h2>股票</h2>
+<br/>
+<%= form_tag '/stocks' do %>
+<label>股票代码:</label><%= text_field_tag :code, params[:code] %><br/>
+<label>股票名称:</label><%= text_field_tag :name, params[:name] %><br/>
+<label>价格区间:</label><%= text_field_tag :low_current_price, params[:low_current_price] %><当前价格<<%= text_field_tag :high_current_price, params[:high_current_price]  %><br/>
+<label>十年最高:</label><%= text_field_tag :low_ten_years_top, params[:low_ten_years_top] %><十年最高<<%= text_field_tag :high_ten_years_top, params[:high_ten_years_top]  %><br/>
+<label>十年最低:</label><%= text_field_tag :low_ten_years_low, params[:low_ten_years_low] %><十年最低<<%= text_field_tag :high_ten_years_low, params[:high_ten_years_low]  %><br/>
+<label>进场阀值:</label><%= text_field_tag :low_buy_price, params[:low_buy_price] %><进场阀值<<%= text_field_tag :high_buy_price, params[:high_buy_price]  %><br/>
+<label>状态:</label><%= text_field_tag :status, params[:status] %><br/>
+<label>沪(sh)/深(sz):</label><%= text_field_tag :city_name, params[:city_name] %><br/>
+<%= submit_tag '查询' %>
+<% end %>
+<table>
+  <thead>
+  <th>股票代码</th>
+  <th>股票名称</th>
+  <th>当前价钱(分)</th>
+  <th>十年最高(分)</th>
+  <th>十年最低(分)</th>
+  <th>进场阀值(分)</th>
+  <th>状态</th>
+  <th>沪/深</th>
+  <th>操作</th>
+  </thead>
+  <%= @stocks.each do |stock| %>
+    <tr>
+      <td><%= stock.code %></td>
+      <td><%= stock.name %></td>
+      <td><%= stock.current_price %></td>
+      <td><%= stock.ten_years_top %></td>
+      <td><%= stock.ten_years_low %></td>
+      <td><%= stock.buy_price %></td>
+      <td><%= stock.status %></td>
+      <td><%= stock.city_name %></td>
+      <td><%= link_to '修改', "/stocks/#{stock.id}/edit" %></td>
+    </tr>
+  <% end %>
+</table>
+
+<%= will_paginate @stocks %>
