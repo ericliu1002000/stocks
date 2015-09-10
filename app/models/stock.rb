@@ -17,6 +17,28 @@ class Stock < ActiveRecord::Base
     end
   end
 
+  def self.common_query options
+    stocks = Stock.all
+    stocks = stocks.where(code: options[:code]) unless options[:code].blank?
+    stocks = stocks.where(name: options[:name]) unless options[:name].blank?
+    stocks = stocks.where(status: options[:status]) unless options[:status].blank?
+    stocks = stocks.where(city_name: options[:city_name]) unless options[:city_name].blank?
+
+    stocks = stocks.where("current_price >= ?", options[:low_current_price]) unless options[:low_current_price].blank?
+    stocks = stocks.where("current_price <= ?", options[:high_current_price]) unless options[:high_current_price].blank?
+
+    stocks = stocks.where("ten_years_top >= ?", options[:low_ten_years_top]) unless options[:low_ten_years_top].blank?
+    stocks = stocks.where("ten_years_top <= ?", options[:high_ten_years_top]) unless options[:high_ten_years_top].blank?
+
+    stocks = stocks.where("ten_years_low >= ?", options[:low_ten_years_low]) unless options[:low_ten_years_low].blank?
+    stocks = stocks.where("ten_years_low <= ?", options[:high_ten_years_low]) unless options[:high_ten_years_low].blank?
+
+    stocks = stocks.where("buy_price >= ?", options[:low_buy_price]) unless options[:low_buy_price].blank?
+    stocks = stocks.where("buy_price <= ?", options[:high_buy_price]) unless options[:high_buy_price].blank?
+
+    stocks
+  end
+
 end
 
 
