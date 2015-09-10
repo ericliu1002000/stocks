@@ -7,7 +7,8 @@ class CrateStockTable < ActiveRecord::Migration
       t.integer :ten_years_top
       t.integer :ten_years_low
       t.integer :buy_price, :default => 200
-      t.string :status, :default => 'unknow'
+      t.string :status, :default => '未知'
+      t.integer :best_buy_price, :default => 10
       t.timestamps
       t.string :city_name
     end
