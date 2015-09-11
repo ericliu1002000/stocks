@@ -4,6 +4,13 @@ class Stock < ActiveRecord::Base
   STATUS = ['垃圾', '不考虑', '好', '未知']
 
 
+
+  # Stock.update_and_get_useful_stock
+  def self.update_and_get_useful_stock
+    Stock.update_stock
+    Stock.get_useful_stock
+  end
+
   #获取靠谱股票推荐，需要符合以下条件：
   # 1. 10年高价是10年低价的3倍以上。
   # 2. 当前价格达到buy_price 上下10%左右。
@@ -13,18 +20,30 @@ class Stock < ActiveRecord::Base
   def self.get_useful_stock
     recommend_stocks = []
     very_recommend_stocks = []
+    lowest = []
     stocks = Stock.where status: '好'
     stocks.each do |stock|
+      if stock.ten_years_low == 0
+        pp "#{stock.code}  :分母为 0 "
+        next
+      end
       next unless stock.ten_years_top / stock.ten_years_low > 3
-      if stock.current_price < stock.buy_price * 1.1
+      next if stock.current_price == 0
+      if stock.current_price < (stock.buy_price * 1.1).to_i
+        pp stock.current_price
+        pp stock.buy_price * 1.1
         recommend_stocks << [stock.code, stock.name]
       end
 
-      if stock.current_price << stock.best_buy_price * 1.1
+      if stock.current_price < (stock.best_buy_price * 1.1).to_i
         very_recommend_stocks << [stock.code, stock.name]
       end
+
+      if stock.current_price == stock.ten_years_low
+        lowest << [stock.code, stock.name]
+      end
     end
-    return recommend_stocks, very_recommend_stocks
+    return  very_recommend_stocks,lowest, recommend_stocks
   end
 
   # Stock.update_stock
@@ -59,7 +78,7 @@ class Stock < ActiveRecord::Base
           topest_price = ((values[4].to_f)*100).to_i
           # 今日最低
           lowest_price = ((values[5].to_f)*100).to_i
-          if stock.tgiten_years_low.to_i > lowest_price
+          if stock.ten_years_low.to_i > lowest_price
             stock.ten_years_low = lowest_price
           end
 
