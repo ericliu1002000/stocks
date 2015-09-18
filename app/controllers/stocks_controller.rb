@@ -13,12 +13,12 @@ class StocksController < ApplicationController
 
   def update
     stock = Stock.find_by_id(params[:id])
-    begin
+    # begin
     stock.update_info params.permit(:ten_years_top, :ten_years_low, :buy_price)
-    redirect_to :index
-    rescue Exception=>e
-      render :edit
-    end
+    redirect_to action: :index
+    # rescue Exception=>e
+    #   render :edit
+    # end
   end
 
 end

@@ -1,6 +1,6 @@
 <h2>修改<%= @stock.name %>的相关信息</h2>
 <br/>
-<%= form_tag "/stocks/#{stock.id}", method: :patch do %>
+<%= form_tag "/stocks/#{@stock.id}", method: :patch do %>
     <label>十年最高(分)</label><%= text_field_tag :ten_years_top, params[:ten_years_top]||@stock.ten_years_top %><br/>
     <label>十年最低(分)</label><%= text_field_tag :ten_years_low, params[:ten_years_low]||@stock.ten_years_low %><br/>
     <label>买入阀值(分)</label><%= text_field_tag :buy_price, params[:buy_price]||@stock.buy_price %><br/>

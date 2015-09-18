@@ -175,6 +175,13 @@ class Stock < ActiveRecord::Base
     stocks
   end
 
+  def update_info options
+    # (:ten_years_top, :ten_years_low, :buy_price)
+    self.ten_years_top=options[:ten_years_top] unless options[:ten_years_top].blank?
+    self.ten_years_low=options[:ten_years_low] unless options[:ten_years_low].blank?
+    self.buy_price=options[:buy_price] unless options[:buy_price].blank?
+    self.save!
+  end
 
 end
 
