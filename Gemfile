@@ -1,6 +1,9 @@
 # source 'https://rubygems.org'
 source 'http://ruby.taobao.org'
 
+ruby '2.0.0'
+#ruby-gemset=stocks
+
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem 'rails', '4.1.4'
 # Use sqlite3 as the database for Active Record
