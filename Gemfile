@@ -47,8 +47,8 @@ gem 'devise'
 gem 'will_paginate', '~> 3.0'
 
 # excel操作
-gem 'spreadsheet'
-
+# gem 'spreadsheet'
+#
 gem 'rubyXL'
-
-gem 'roo'
+#
+# gem 'roo'
