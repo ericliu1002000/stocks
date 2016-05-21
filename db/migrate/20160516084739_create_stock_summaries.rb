@@ -1,7 +1,7 @@
 class CreateStockSummaries < ActiveRecord::Migration
   def change
     create_table :stock_summaries do |t|
-      t.name
+      t.string :name
 
       t.timestamps
     end

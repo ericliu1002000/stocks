@@ -21,4 +21,8 @@ class StocksController < ApplicationController
     # end
   end
 
+  def display
+
+  end
+
 end

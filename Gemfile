@@ -1,5 +1,5 @@
 # source 'https://rubygems.org'
-source 'http://ruby.taobao.org'
+source 'https://gems.ruby-china.org/'
 
 ruby '2.0.0'
 #ruby-gemset=stocks
@@ -45,3 +45,10 @@ gem 'devise'
 
 # 分页
 gem 'will_paginate', '~> 3.0'
+
+# excel操作
+gem 'spreadsheet'
+
+gem 'rubyXL'
+
+gem 'roo'
