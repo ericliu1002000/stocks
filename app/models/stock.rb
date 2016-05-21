@@ -81,7 +81,11 @@ class Stock < ActiveRecord::Base
                 "http://money.finance.sina.com.cn/corp/go.php/vFD_CashFlow/stockid/#{stock.code}/ctrl/#{year}/displaytype/4.phtml"
             end
       pp "#访问url:  #{uri}"
-      doc = Nokogiri::HTML(open(uri).read.force_encoding('GBK').encode("utf-8"))
+      # doc = Nokogiri::HTML(open(uri).read.force_encoding('GBK').encode("utf-8"))
+      response = RestClient.get uri
+      ec = Encoding::Converter.new("GBK", "UTF-8")
+      doc = ec.convert response.body
+      doc = Nokogiri::HTML(doc)
       table_content = doc.xpath("//table").select{|x|x.to_s.include?("BalanceSheetNewTable0")||x.to_s.include?("ProfitStatementNewTable0")}[0] # table内容
       return if table_content.blank?
       # pp "#table_content size: #{table_content.to_s.size}"
