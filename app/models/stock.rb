@@ -4,7 +4,6 @@ class Stock < ActiveRecord::Base
 
   require 'rest-client'
   require 'pp'
-  require 'open-uri'
   require 'nokogiri'
   require 'open-uri'
 
@@ -752,7 +751,7 @@ __END__
 
   while true
     begin
-      Stock.init_get_all_a_stock_info_from_sina true
+      Stock.init_get_all_a_stock_info_from_sina_between 1,200 true
     rescue Exception => e
       pp 'error restart'
     end

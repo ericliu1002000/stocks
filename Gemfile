@@ -1,5 +1,5 @@
-# source 'https://rubygems.org'
-source 'https://gems.ruby-china.org/'
+source 'https://rubygems.org'
+# source 'https://gems.ruby-china.org/'
 
 ruby '2.0.0'
 #ruby-gemset=stocks
@@ -30,7 +30,7 @@ gem 'rest-client'
 
 # Spring speeds up development by keeping your application running in the background. Read more: https://github.com/rails/spring
 gem 'spring',        group: :development
-gem 'devise'
+# gem 'devise', '=3.5.10'
 # Use ActiveModel has_secure_password
 # gem 'bcrypt', '~> 3.1.7'
 
@@ -47,8 +47,8 @@ gem 'devise'
 gem 'will_paginate', '~> 3.0'
 
 # excel操作
-gem 'spreadsheet'
+# gem 'spreadsheet'
 
-gem 'rubyXL'
-
-gem 'roo'
+# gem 'rubyXL'
+gem 'nokogiri', '1.6.6.2'
+# gem 'roo'
