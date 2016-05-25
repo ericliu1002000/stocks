@@ -22,7 +22,12 @@ class StocksController < ApplicationController
   end
 
   def display
+    @code = params[:code]
+    @quarterly_date = params[:season_date]
+  end
 
+  def summary
+    @stock = Stock.find_by_code(params[:code])
   end
 
 end

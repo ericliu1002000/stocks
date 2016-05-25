@@ -1,0 +1,35 @@
+<h3><%= "#{@stock.name}(#{@stock.code})" %></h3>
+<% assessment = @stock.assessments.valid.first %>
+<table>
+  <% year_arr = assessment.assessment_items.pluck(:year).uniq %>
+  <tr>
+    <td width="250px"></td><td width="100px"></td>
+      <% year_arr.each do |year| %>
+        <td width="100px"><%= year %></td>
+      <% end %>
+  </tr>
+  <% AnalysisType.pluck(:category).uniq.each do |category| %>
+        <tr>
+          <td><%= category %></td><td></td>
+          <% year_arr.size.times do %>
+            <td></td>
+          <% end %>
+        </tr>
+        <% AnalysisType.where(category: category).order(:sort_by).each do |at| %>
+          <tr>
+            <td><%= ("&nbsp;"*at.tap*4).html_safe %><%= at.name %></td>
+            <td><%= "M RMB" %></td>
+            <% if at.with_year? %>
+                <% year_arr.each do |year| %>
+                    <% val = assessment.assessment_items.where(analysis_type_id: at.id, year: year).first.value %>
+                    <td><%= val == 0.0 ? '-' : val %></td>
+                <% end %>
+            <% else %>
+                <% val = assessment.assessment_items.where(analysis_type_id: at.id).first.value %>
+                <td><%= val == 0.0 ? '-' : val %></td>
+                <%= ("<td></td>"*(year_arr.size-1)).html_safe %>
+            <% end %>
+          </tr>
+        <% end %>
+  <% end %>
+</table>

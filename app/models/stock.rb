@@ -1,12 +1,20 @@
 class Stock < ActiveRecord::Base
 
   has_many :stock_data_infos
+  has_many :assessments
 
   require 'rest-client'
   require 'pp'
   require 'nokogiri'
   require 'open-uri'
 
+  CN_US_STOCKS = ["BSPM", "CNR", "RENN", "JMEI", "CCCR", "YGE", "CGA", "YRD", "BORN", "EFUT", "HOLI", "HIMX", "CPHI", "SFUN", "CLNT", "JRJC", "MOMO", "AUO", "CYD", "CSIQ", "SIMO", "DSWL", "XNY", "NFEC", "SPIL", "NTES", "DANG", "ACTS", "LITB", "JKS", "TSM", "GIGM", "NQ", "CNIT", "CCM", "SOL", "IMOS", "JASO", "UMC", "HPJ", "QIHU", "TSL", "LEJU", "CXDC", "CYOU", "SOHU", "KGJI", "LFC", "TOUR", "DQ", "CHU", "CCCL", "CTRP", "TAOM", "IDI", "SMI", "JD", "CISG", "CHL", "KNDI", "ASX", "JOBS", "SNP", "HTHT", "CEA", "EDU", "ZNH", "CHA", "TEDU", "HNP", "CAAS", "CBPO", "BIDU", "RCON", "GSH", "APWC", "CEO", "FENG", "CADC", "AMC", "XRS", "YY", "SHI", "CHT", "BABA", "YIN", "ATV", "MPEL", "GSOL", "CNTF", "EHIC", "NPD", "PTR", "SINA", "JFC", "FFHL", "LONG", "HIHO", "ALMMF", "AMCF", "CALI", "CCGM", "CCSC", "CDII", "CHGS", "CHLN", "CHOP", "CJJD", "CLWT", "CMFO", "CNYD", "CO", "CPGI", "CPSL", "CSUN", "CTC", "CYDI", "DION", "DL", "EDS", "EGT", "EJ", "GAI", "GOAS", "GPRC", "GRO", "HEAT", "JP", "JST", "KEYP", "KUTV", "LAS", "LIWA", "MY", "NDAC", "NED", "NTE", "OIIM", "QKLS", "SCOK", "SKBI", "SORL", "SUTR", "SVA", "THTI", "TPI", "VALV", "ZA", "ZOOM", "ZX", "KZ", "XIN", "YZC", "VNET", "ACH", "VIPS", "XUE", "WB", "UTSI", "XNET", "MOBI", "CHNR", "SSW", "ATHM", "WUBA", "ALN", "GSI", "KANG", "NCTY", "ZPIN", "AMCN", "SEED", "SYUT", "GURE", "QUNR", "SGOC", "SKYS", "WBAI", "BITA", "ONP", "CREG", "VISN", "HGSH", "CCIH", "CNET", "STV", "EVK", "KONE", "BNSO", "CBAK", "NOAH", "DHRM", "LEDS", "WOWO", "SPU", "ATAI", "CMCM", "SINO", "OSN"]
+
+  MONEY_UNIT = {
+      1 => 'M RMB',
+      2 => 'M RMB',
+      3 => 'M USD',
+  }
 
   # 获得指定年份所有A股的负债、利润、现金数据
   def self.get_all_a_stock_info_from_sina year, skip_has_downloaded=false
@@ -62,13 +70,14 @@ class Stock < ActiveRecord::Base
       pp "###"*50
       pp "stock_id:#{stock.id} name:#{stock.name} stock_summary_id:#{stock_summary.name}   year:#{year}"
 
-      # t_stock_data_info = StockDataInfo.where(stock_id: stock_id, stock_data_item_id: stock_summary.stock_data_items.first.id).where("quarterly_date in (?) ", ["#{year}-03-31", "#{year}-06-30", "#{year}-09-30", "#{year}-12-31"])
+      t_stock_data_item_id = stock_summary.stock_data_items.first.id rescue ''
+      unless t_stock_data_item_id.blank?
+        t_stock_data_info = StockDataInfo.where(stock_id: stock_id, stock_data_item_id: t_stock_data_item_id).where("quarterly_date in (?) ", ["#{year}-03-31", "#{year}-06-30", "#{year}-09-30", "#{year}-12-31"])
 
-      t_stock_data_info = StockDataInfo.where(stock_id: stock_id, stock_data_item_id: stock_summary.stock_data_items.first.id).where("quarterly_date in (?) ", ["#{year}-03-31", "#{year}-06-30", "#{year}-09-30", "#{year}-12-31"])
-
-      unless t_stock_data_info.blank? # 如果此股、此类型、此年份数据已经抓过，就跳过
-        pp '存在，跳过'
-        return
+        unless t_stock_data_info.blank? # 如果此股、此类型、此年份数据已经抓过，就跳过
+          pp '存在，跳过'
+          return
+        end
       end
 
 
@@ -140,22 +149,51 @@ class Stock < ActiveRecord::Base
   # 从新浪获得所有港股的财务信息
   def self.get_all_hk_stock_info_from_sina skip_has_downloaded=false
     Stock.where(stock_type: 2).each do |stock|
-      self.transaction do
         next if skip_has_downloaded && stock.download_times>=1
         StockSummary.all.each do |stock_summary|
           self.get_hk_stock_info_from_sina stock.id, stock_summary.id
         end
         stock.download_times += 1
         stock.save!
+    end
+  end
+
+
+  def self.get_all_hk_stock_info_from_sina_between start_id, end_id, skip_has_downloaded=false
+    Stock.where("id >= ? and id <= ?", start_id, end_id).each do |stock|
+      next if skip_has_downloaded && stock.download_times>=1
+      StockSummary.all.each do |stock_summary|
+        self.get_hk_stock_info_from_sina stock.id, stock_summary.id
       end
+      stock.download_times += 1
+      stock.save!
     end
   end
 
 
   # 从新浪获得某只港股的财务信息
   def self.get_hk_stock_info_from_sina stock_id, stock_summary_id
+    self.transaction do
+
+
     params_get = ['zero', '1', '2', '3']
     stock_summary = StockSummary.find(stock_summary_id)
+    stock = Stock.find(stock_id)
+
+    pp "##"*50
+    pp "stock_id:#{stock.id} name:#{stock.name} stock_summary_id:#{stock_summary.name}   "
+
+    t_stock_data_item_id = stock_summary.stock_data_items.ids rescue ''
+    unless t_stock_data_item_id.blank?
+      t_stock_data_info = StockDataInfo.where(stock_id: stock_id).where("stock_data_item_id in (?)", t_stock_data_item_id)
+
+      unless t_stock_data_info.blank? # 如果此股、此类型已经抓过，就跳过
+        pp '存在，跳过'
+        return
+      end
+    end
+
+
     body_flag = case stock_summary.name
                   when '资产负债表'
                     'tableGetBalanceSheet'
@@ -184,11 +222,16 @@ class Stock < ActiveRecord::Base
              end
     return if url_pa2.blank?
 
-    stock = Stock.find(stock_id)
+
+
+
 
     uri = "http://stock.finance.sina.com.cn/hkstock/finance/#{stock.code}.html"
-    doc = Nokogiri::HTML(open(uri).read.force_encoding('GBK').encode("utf-8"))
-
+    # doc = Nokogiri::HTML(open(uri).read.force_encoding('GBK').encode("utf-8"))
+    response = RestClient.get uri
+    ec = Encoding::Converter.new("GBK", "UTF-8")
+    doc = ec.convert response.body
+    doc = Nokogiri::HTML(doc)
     total_data = []
     sub_item_name_arr = []
     body_content = doc.xpath("//tbody").select{|x|x.to_s.include?(body_flag)}[0] # 负债
@@ -199,29 +242,39 @@ class Stock < ActiveRecord::Base
       sub_item_name_arr << td_slop.th.content
     end
     total_data << sub_item_name_arr
-    pp sub_item_name_arr
-    pp "抬头数目：#{sub_item_name_arr.size}"
+    # pp sub_item_name_arr
+    # pp "抬头数目：#{sub_item_name_arr.size}"
     params_get.each do |pa| # 获取负债数据
-      pp "获取负债数据"
+      # pp pa
+      # pp "获取负债数据"
       pp uri
       pp "http://stock.finance.sina.com.cn/hkstock/api/jsonp.php/var%20tableData%20=%20/FinanceStatusService.#{url_pa}?symbol=#{stock.code}&#{url_pa2}=#{pa}"
       response = RestClient.get "http://stock.finance.sina.com.cn/hkstock/api/jsonp.php/var%20tableData%20=%20/FinanceStatusService.#{url_pa}?symbol=#{stock.code}&#{url_pa2}=#{pa}"
-      pp "#"*200
-      pp response
+      # pp "#"*200
+      # pp response
       if ! response.valid_encoding?
         response = response.encode("UTF-16be", :invalid=>:replace, :replace=>"?").encode('UTF-8')
       end
       response = response.force_encoding("utf-8").gsub(" ","").gsub("vartableData=(","").gsub(");","")
-      return if response.blank? || response == 'null'
+      next if response.blank? || response == 'null'
       response = response.gsub("null","\"--\"")
-      pp "response: "
-      pp response
+      # pp "response: "
+      # pp response
       response = JSON.parse response
+      row_size = total_data[0].size
       response.each do |x|
-        total_data << x
+        return if row_size > x.size
+        total_data << x[0..row_size-1]
       end
+      # pp 'total_data last:'
+      # pp total_data
     end
+
+    # pp 'total_data before transpose:'
+    # pp total_data
     total_data = total_data.transpose
+    # pp "total_data after transpose:"
+    # pp total_data
     category = ''
     total_data.each_with_index do |row, index|
       next if row[0] == '报告期' || row[0] == "币种" || row[0] == '报表类型'
@@ -245,18 +298,33 @@ class Stock < ActiveRecord::Base
                               stock_data_item_id: stock_data_item.id,
                               quarterly_date: quarterly_date,
                               stock_code: stock.code,
-                              value: row[col_index].gsub(',',''),
+                              value: row[col_index],
                               monetary_unit: unit,
                               source: '新浪财经',
                               url: uri if stock_data_info.blank? # 指定股票，指定季度，指定数据项  数据不存在，则写数据到数据库
       end
 
     end
+    end
   end
 
   # 从雅虎获得所有美股的财务信息
   def self.get_all_usa_stock_info_from_yahoo skip_has_downloaded=false
     Stock.where(stock_type: 3).each do |stock|
+      self.transaction do
+        next if skip_has_downloaded && stock.download_times>=1
+        StockSummary.all.each do |stock_summary|
+          self.get_usa_stock_info_from_yahoo stock.id, stock_summary.id
+        end
+        stock.download_times += 1
+        stock.save!
+      end
+    end
+  end
+
+  # 从雅虎获得所有中概股的财务信息
+  def self.get_all_cn_usa_stocks_info_from_yahoo skip_has_downloaded=false
+    Stock.where(stock_type: 3).where("code in (?) ", self::CN_US_STOCKS).each do |stock|
       self.transaction do
         next if skip_has_downloaded && stock.download_times>=1
         StockSummary.all.each do |stock_summary|
@@ -283,7 +351,13 @@ class Stock < ActiveRecord::Base
                     when '现金流量表'
                       "https://finance.yahoo.com/q/cf?s=#{stock.code}&annual"
                   end
-      doc = Nokogiri::HTML(open(uri).read.encode("utf-8"))
+      # doc = Nokogiri::HTML(open(uri).read.encode("utf-8"))
+
+      response = RestClient.get uri
+      ec = Encoding::Converter.new("GBK", "UTF-8")
+      doc = ec.convert response.body
+      doc = Nokogiri::HTML(doc)
+
       ele_table = doc.xpath("//table").select{|x|x.to_s.include? 'Period Ending'}
       doc_table = Nokogiri::HTML(ele_table.last.to_s)
       return if doc_table.content.blank?
@@ -655,7 +729,584 @@ class Stock < ActiveRecord::Base
   #   File.delete tmp_file_path
   # end
 
+  def generate_fcf start_year, end_year, date, version
+
+    Stock.transaction do
+      Assessment.where(stock_id: id, base_on_year: end_year, early_boundary_year: start_year, delete_flag: 0).each do |a|
+        a.delete_flag = 1
+        a.save!
+      end
+      assessment = Assessment.new stock_id: id,
+                     base_on_year: end_year,
+                     early_boundary_year: start_year,
+                     algorithm_name: version,
+                     delete_flag: 0
+      assessment.save!
+
+      assessment.base_on_year.to_i.downto assessment.early_boundary_year.to_i do |year|
+        AnalysisType.used.with_year.each do |analysis_type|
+          Exception.raise "#{analysis_type.name}的计算函数为空" if analysis_type.blank?
+          # p_num = self.method(analysis_type.calc_expression.to_sym).arity
+          ps = self.method(analysis_type.calc_expression.to_sym).parameters.collect{|x|x.last}
+          val = if ps == [:year, :version]
+                  self.__send__ analysis_type.calc_expression, year, version
+                elsif ps == [:start_year, :end_year, :version]
+                  self.__send__ analysis_type.calc_expression, assessment.early_boundary_year, assessment.base_on_year, version
+                elsif ps == [:version]
+                  self.__send__ analysis_type.calc_expression, version
+                elsif ps == [:date, :version]
+                  self.__send__ analysis_type.calc_expression, date, version
+                elsif ps == [:start_year, :end_year, :date, :version]
+                  self.__send__ analysis_type.calc_expression, assessment.early_boundary_year, assessment.base_on_year, date, version
+                end
+          item = AssessmentItem.new year: year,
+                                     analysis_type_id: analysis_type.id,
+                                     assessment_id: assessment.id,
+                                     money_unit: Stock::MONEY_UNIT[stock_type],
+                                     value: val
+          item.save!
+        end
+      end
+
+      AnalysisType.used.without_year.each do |analysis_type|
+        Exception.raise "#{analysis_type.name}的计算函数为空" if analysis_type.blank?
+        # p_num = self.method(analysis_type.calc_expression.to_sym).arity
+        ps = self.method(analysis_type.calc_expression.to_sym).parameters.collect{|x|x.last}
+        val = if ps == [:year, :version]
+                self.__send__ analysis_type.calc_expression, assessment.base_on_year, version
+              elsif ps == [:start_year, :end_year, :version]
+                self.__send__ analysis_type.calc_expression, assessment.early_boundary_year, assessment.base_on_year, version
+              elsif ps == [:version]
+                self.__send__ analysis_type.calc_expression, version
+              elsif ps == [:date, :version]
+                self.__send__ analysis_type.calc_expression, date, version
+              elsif ps == [:start_year, :end_year, :date, :version]
+                self.__send__ analysis_type.calc_expression, assessment.early_boundary_year, assessment.base_on_year, date, version
+              end
+        item = AssessmentItem.new year: assessment.base_on_year,
+                                  analysis_type_id: analysis_type.id,
+                                  assessment_id: assessment.id,
+                                  money_unit: Stock::MONEY_UNIT[stock_type],
+                                  value: val
+        item.save!
+      end
+
+    end
+  end
+
+  #************************* 动态调用 ⬇️ **************************************
+
+  def calc_revenue year, version
+    self.__send__ "calc_revenue_#{version}", year
+  end
+
+  def calc_COGS year, version
+    self.__send__ "calc_COGS_#{version}", year
+  end
+
+  def calc_SGA year, version
+    self.__send__ "calc_SGA_#{version}", year
+  end
+
+  def calc_other_costs year, version
+    self.__send__ "calc_other_costs_#{version}", year
+  end
+
+  def calc_EBIT year, version
+    self.__send__ "calc_EBIT_#{version}", year
+  end
+
+  def calc_work_capital year, version
+    self.__send__ "calc_work_capital_#{version}", year
+  end
+
+  def calc_balance_cash year, version
+    self.__send__ "calc_balance_cash_#{version}", year
+  end
+
+  def calc_inventory year, version
+    self.__send__ "calc_inventory_#{version}", year
+  end
+
+  def calc_receivables year, version
+    self.__send__ "calc_EBIT_#{version}", year
+  end
+
+  def calc_payables year, version
+    self.__send__ "calc_payables_#{version}", year
+  end
+
+  def calc_interest_bearing_debts year, version
+    self.__send__ "calc_interest_bearing_debts_#{version}", year
+  end
+
+  def calc_short_term_loans year, version
+    self.__send__ "calc_short_term_loans_#{version}", year
+  end
+
+  def calc_long_term_loans year, version
+    self.__send__ "calc_long_term_loans_#{version}", year
+  end
+
+  def calc_bill_payable year, version
+    self.__send__ "calc_bill_payable_#{version}", year
+  end
+
+  def calc_NOPLAT year, version
+    self.__send__ "calc_NOPLAT_#{version}", year
+  end
+
+  def calc_depreciation_and_amortization year, version
+    self.__send__ "calc_depreciation_and_amortization_#{version}", year
+  end
+
+  def calc_increase_in_working_capital year, version
+    self.__send__ "calc_increase_in_working_capital_#{version}", year
+  end
+
+  def calc_CAPEX year, version
+    self.__send__ "calc_CAPEX_#{version}", year
+  end
+
+  def calc_FCF year, version
+    self.__send__ "calc_FCF_#{version}", year
+  end
+
+
+
+  def calc_average_FCF start_year, end_year, version
+    self.__send__ "calc_average_FCF_#{version}", start_year, end_year
+  end
+
+  def calc_average_incr_in_working_capital start_year, end_year, version
+    self.__send__ "calc_average_incr_in_working_capital_#{version}", start_year, end_year
+  end
+
+  def calc_average_CAPEX start_year, end_year, version
+    self.__send__ "calc_average_CAPEX_#{version}", start_year, end_year
+  end
+
+  def calc_pro_forma_FCF start_year, end_year, version
+    self.__send__ "calc_pro_forma_FCF_#{version}", start_year, end_year
+  end
+
+
+  def calc_FCF_multiples version
+    self.__send__ "calc_FCF_multiples_#{version}"
+  end
+
+  def calc_cash_rate_for_NOPLAT version
+    self.__send__ "calc_cash_rate_for_NOPLAT_#{version}"
+  end
+
+  def calc_exchange_rate version
+    self.__send__ "calc_exchange_rate_#{version}"
+  end
+
+  def calc_ennterprise_value start_year, end_year, version
+    self.__send__ "calc_ennterprise_value_#{version}", start_year, end_year
+  end
+
+  def calc_interesting_bearing_debts year, version
+    self.__send__ "calc_interesting_bearing_debts_#{version}", year
+  end
+
+  def calc_valuation_cash year, version
+    self.__send__ "calc_valuation_cash_#{version}", year
+  end
+
+  def calc_equity_value start_year, end_year, version
+    self.__send__ "calc_equity_value_#{version}", start_year, end_year
+  end
+
+  def calc_shares_outstanding year, version
+    self.__send__ "calc_shares_outstanding_#{version}", year
+  end
+
+  def calc_per_share_value start_year, end_year, version
+    self.__send__ "calc_per_share_value_#{version}", start_year, end_year
+  end
+
+  def calc_current_stock_price date, version
+    self.__send__ "calc_current_stock_price_#{version}", date
+  end
+
+  def calc_premium_by_discount start_year, end_year, date, version
+    self.__send__ "calc_premium_by_discount_#{version}", start_year, end_year, date
+  end
+
+
+  #************************* 动态调用 ⬆️️ **************************************
+
+  def get_annual_info_by_item_name_and_year item_name, year
+  stock_data_infos = StockDataInfo.where(stock_id: self.id).joins(:stock_data_item)
+    .where("stock_data_items.name = ? ", item_name)
+    .where("stock_data_infos.quarterly_date = ?", "#{year}-12-31")
+
+    excption_str = "stock_id:#{self.id},quarterly_date:#{year}-12-31,item_name:#{item_name}"
+    Exception.raise "数据不存在, #{excption_str}" if stock_data_infos.blank?
+    Exception.raise "数据重复, #{excption_str}" if stock_data_infos.count > 1
+
+    stock_data_info = stock_data_infos.first
+
+    stock_data_info.value
+  end
+
+
+
+  def calc_revenue_100 year
+    case stock_type
+      when 1
+        value = get_annual_info_by_item_name_and_year '一、营业总收入', year
+        (value/100.0).round(2)
+      when 2
+        (get_annual_info_by_item_name_and_year '营业额', year).round(2)
+      when 3
+        value = get_annual_info_by_item_name_and_year 'Total Revenue', year
+        (value/1000.0).round(2)
+    end
+
+  end
+
+  def calc_COGS_100 year
+    case stock_type
+      when 1
+        value = get_annual_info_by_item_name_and_year '营业成本', year
+        (value/100.0).round(2)
+      when 2
+        (get_annual_info_by_item_name_and_year '销售成本', year).round(2)
+      when 3
+        value = get_annual_info_by_item_name_and_year 'Cost of Revenue', year
+        (value/1000.0).round(2)
+    end
+
+  end
+
+  def calc_SGA_100 year
+    case stock_type
+      when 1
+        value1 = get_annual_info_by_item_name_and_year '销售费用', year
+        value2 = get_annual_info_by_item_name_and_year '管理费用', year
+        (value1/100.0 + value2/100.0).round(2)
+      when 2
+        value1 = get_annual_info_by_item_name_and_year '销售及分销费用', year
+        value2 = get_annual_info_by_item_name_and_year '一般及行政费用', year
+        (value1 + value2).round(2)
+      when 3
+        value1 = get_annual_info_by_item_name_and_year 'Research Development', year
+        value2 = get_annual_info_by_item_name_and_year 'Selling General and Administrative', year
+        (value1/1000.0 + value2/1000.0).round(2)
+    end
+  end
+
+  def calc_other_costs_100 year
+    case stock_type
+      when 1
+        value = get_annual_info_by_item_name_and_year '资产减值损失', year
+        (value/100.0).round(2)
+      when 2
+        0
+      when 3
+        value = get_annual_info_by_item_name_and_year 'Others', year
+        (value/1000.0).round(2)
+    end
+  end
+
+  def calc_EBIT_100 year
+    case stock_type
+      when 1
+        (calc_revenue_100(year) - calc_COGS_100(year) - calc_SGA_100(year) - calc_other_costs_100(year)).round(2)
+      when 2
+        (calc_revenue_100(year) - calc_COGS_100(year) - calc_SGA_100(year) - calc_other_costs_100(year)).round(2)
+      when 3
+        value = get_annual_info_by_item_name_and_year 'Earnings Before Interest And Taxes', year
+        (value/1000.0).round(2)
+    end
+  end
+
+  def calc_work_capital_100 year
+    (calc_balance_cash_100(year) + calc_inventory_100(year) + calc_receivables_100(year) - calc_payables_100(year)).round(2)
+  end
+
+  def calc_balance_cash_100 year
+    case stock_type
+      when 1
+        value = get_annual_info_by_item_name_and_year '货币资金', year
+        (value/100).round(2)
+      when 2
+        (get_annual_info_by_item_name_and_year '现金及银行结存(流动资产)', year).round(2)
+      when 3
+        value = get_annual_info_by_item_name_and_year 'Cash And Cash Equivalents', year
+        (value/1000).round(2)
+    end
+  end
+
+  def calc_inventory_100 year
+    case stock_type
+      when 1
+        value = get_annual_info_by_item_name_and_year '存货', year
+        (value/100).round(2)
+      when 2
+        (get_annual_info_by_item_name_and_year '存货(流动资产)', year).round(2)
+      when 3
+        value = get_annual_info_by_item_name_and_year 'Inventory', year
+        (value/1000).round(2)
+    end
+  end
+
+  def calc_receivables_100 year
+    case stock_type
+      when 1
+        value1 = get_annual_info_by_item_name_and_year '应收票据', year
+        value2 = get_annual_info_by_item_name_and_year '应收账款', year
+        value3 = get_annual_info_by_item_name_and_year '其他应收款', year
+        value4 = get_annual_info_by_item_name_and_year '预收款项', year
+        ((value1 + value2 + value3 - value4)/100.0).round(2)
+      when 2
+        (get_annual_info_by_item_name_and_year '应收账款(流动资产)', year).round(2)
+      when 3
+        0
+    end
+  end
+
+  def calc_payables_100 year
+    case stock_type
+      when 1
+        value1 = get_annual_info_by_item_name_and_year '应付票据', year
+        value2 = get_annual_info_by_item_name_and_year '应付账款', year
+        value3 = get_annual_info_by_item_name_and_year '其他应付款', year
+        value4 = get_annual_info_by_item_name_and_year '预付款项', year
+        ((value1 + value2 + value3 - value4)/100.0).round(2)
+      when 2
+        (get_annual_info_by_item_name_and_year '应付帐款(流动负债)', year).round(2)
+      when 3
+        value = get_annual_info_by_item_name_and_year 'Accounts Payable', year
+        (value/1000).round(2)
+    end
+  end
+
+  def calc_interest_bearing_debts_100 year
+    (calc_short_term_loans_100(year) + calc_long_term_loans_100(year) + calc_bill_payable_100(year)).round(2)
+  end
+
+  def calc_short_term_loans_100 year
+    case stock_type
+      when 1
+        value = get_annual_info_by_item_name_and_year '短期借款', year
+        (value/100.0).round(2)
+      when 2
+        (get_annual_info_by_item_name_and_year '银行贷款(流动负债)', year).round(2)
+      when 3
+        value1 = get_annual_info_by_item_name_and_year 'Short/Current Long Term Debt', year
+        value2 = get_annual_info_by_item_name_and_year 'Long Term Debt', year
+        (value1/1000.0-value2/1000).round(2)
+    end
+  end
+
+  def calc_long_term_loans_100 year
+    case stock_type
+      when 1
+        value = get_annual_info_by_item_name_and_year '长期借款', year
+        (value/100.0).round(2)
+      when 2
+        0
+      when 3
+        value = get_annual_info_by_item_name_and_year 'Long Term Debt', year
+        (value/1000).round(2)
+    end
+  end
+
+  def calc_bill_payable_100 year
+    case stock_type
+      when 1
+        value = get_annual_info_by_item_name_and_year '应付债券', year
+        (value/100.0).round(2)
+      when 2
+        0
+      when 3
+        0
+    end
+  end
+
+
+  def calc_NOPLAT_100 year
+    (calc_EBIT_100(year)*(1-calc_cash_rate_for_NOPLAT_100)).round(2)
+  end
+
+  def calc_depreciation_and_amortization_100 year
+    case stock_type
+      when 1
+        value1 = get_annual_info_by_item_name_and_year "资产减值准备", year
+        value2 = get_annual_info_by_item_name_and_year "固定资产折旧、油气资产折耗、生产性物资折旧", year
+        value3 = get_annual_info_by_item_name_and_year "无形资产摊销", year
+        value4 = get_annual_info_by_item_name_and_year "长期待摊费用摊销", year
+        ((value1 + value2 + value3 + value4)/100.0).round(2)
+      when 2
+        (get_annual_info_by_item_name_and_year '折旧', year).round(2)
+      when 3
+        value1 = get_annual_info_by_item_name_and_year "Depreciation", year
+        value2 = get_annual_info_by_item_name_and_year "Adjustments To Net Income", year
+        ((value1 + value2)/1000.0).round(2)
+    end
+  end
+
+  def calc_increase_in_working_capital_100 year
+    case stock_type
+      when 1
+        (calc_work_capital_100(year) - calc_work_capital_100(year.to_i-1)).round(2)
+      when 2
+        (calc_work_capital_100(year) - calc_work_capital_100(year.to_i-1)).round(2)
+      when 3
+        value1 = get_annual_info_by_item_name_and_year "Changes In Accounts Receivables", year
+        value2 = get_annual_info_by_item_name_and_year "Changes In Liabilities", year
+        value3 = get_annual_info_by_item_name_and_year "Changes In Inventories", year
+        ((value1 + value2 + value3)/1000.0).round(2)
+    end
+  end
+
+  def calc_CAPEX_100 year
+    case stock_type
+      when 1
+        value = get_annual_info_by_item_name_and_year '购建固定资产、无形资产和其他长期资产所支付的现金', year
+        (value/100.0).round(2)
+      when 2
+        (get_annual_info_by_item_name_and_year '购置固定资产款项', year).round(2)
+      when 3
+        value = get_annual_info_by_item_name_and_year 'Capital Expenditures', year
+        (value/1000.0).round(2)
+    end
+  end
+
+  def calc_FCF_100 year
+    (calc_NOPLAT_100(year) - calc_increase_in_working_capital_100(year) - calc_CAPEX_100(year) + calc_depreciation_and_amortization_100(year)).round(2)
+  end
+
+  def calc_average_FCF_100 start_year, end_year
+    start_year = start_year.to_i
+    end_year = end_year.to_i
+    total = 0.0
+    start_year.to_i.upto end_year.to_i do |year|
+      total += calc_FCF_100 year
+    end
+    (total/(end_year-start_year+1)).round(2)
+  end
+
+  def calc_average_incr_in_working_capital_100 start_year, end_year
+    start_year = start_year.to_i
+    end_year = end_year.to_i
+    total = 0.0
+    start_year.to_i.upto end_year.to_i do |year|
+      total += calc_increase_in_working_capital_100 year
+    end
+    (total/(end_year-start_year+1)).round(2)
+  end
+
+  def calc_average_CAPEX_100 start_year, end_year
+    start_year = start_year.to_i
+    end_year = end_year.to_i
+    total = 0.0
+    start_year.to_i.upto end_year.to_i do |year|
+      total += calc_CAPEX_100 year
+    end
+    (total/(end_year-start_year+1)).round(2)
+  end
+
+  def calc_pro_forma_FCF_100 start_year, end_year
+    (calc_NOPLAT_100(end_year) - calc_average_incr_in_working_capital_100(start_year, end_year) - calc_average_CAPEX_100(start_year, end_year) + calc_depreciation_and_amortization_100(end_year)).round(2)
+  end
+
+
+  def calc_FCF_multiples_100
+    case stock_type
+      when 1
+        10.0
+      when 2
+        10.0
+      when 3
+        10.0
+    end
+  end
+
+  def calc_cash_rate_for_NOPLAT_100
+    case stock_type
+      when 1
+        0.25
+      when 2
+        0.25
+      when 3
+        0.25
+    end
+  end
+
+  def calc_exchange_rate_100
+    case stock_type
+      when 1
+        1
+      when 2
+        0.84
+      when 3
+        6.53
+    end
+  end
+
+  def calc_ennterprise_value_100 start_year, end_year
+    (calc_pro_forma_FCF_100(start_year, end_year)*calc_FCF_multiples_100).round(2)
+  end
+
+  def calc_interesting_bearing_debts_100 year
+    calc_interest_bearing_debts_100 year
+  end
+
+  def calc_valuation_cash_100 year
+    calc_balance_cash_100 year
+  end
+
+  def calc_equity_value_100 start_year, end_year
+    (calc_valuation_cash_100(end_year) + calc_ennterprise_value_100(start_year, end_year) - calc_interesting_bearing_debts_100(end_year)).round(2)
+  end
+
+  def calc_shares_outstanding_100 year
+    case stock_type
+      when 1
+        value = get_annual_info_by_item_name_and_year '实收资本(或股本)', year
+        (value/100.0).round(2)
+      when 2
+        ((get_annual_info_by_item_name_and_year '股份数目(香港)', year)/1000000.0).round(2)
+      when 3
+        value = get_annual_info_by_item_name_and_year 'Common Stock', year
+        (value/1000.0).round(2)
+    end
+  end
+
+  def calc_per_share_value_100 start_year, end_year
+    (calc_equity_value_100(start_year, end_year)/calc_shares_outstanding_100(end_year)).round(2)
+  end
+
+  def calc_current_stock_price_100 date
+    case stock_type
+      when 1
+        21.4 # TODO
+      when 2
+        160.2
+      when 3
+        23.5
+    end
+  end
+
+  def calc_premium_by_discount_100 start_year, end_year, date
+    case stock_type
+      when 1
+        (calc_current_stock_price_100(date)/calc_per_share_value_100(start_year, end_year) - 1).round(3)
+      when 2
+        (calc_current_stock_price_100(date)*calc_exchange_rate_100/calc_per_share_value_100(start_year, end_year)-1).round(3)
+      when 3
+        (calc_current_stock_price_100(date)/calc_per_share_value_100(start_year, end_year) - 1).round(3)
+    end
+  end
+
 end
+
+
 
 __END__
 

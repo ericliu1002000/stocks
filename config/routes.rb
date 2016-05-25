@@ -8,6 +8,7 @@ Rails.application.routes.draw do
   resources :stocks do
     collection do
       get :display
+      get :summary
     end
   end
   # Example of regular route:
