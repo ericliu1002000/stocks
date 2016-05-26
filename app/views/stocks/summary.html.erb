@@ -10,26 +10,122 @@
   </tr>
   <% AnalysisType.pluck(:category).uniq.each do |category| %>
         <tr>
-          <td><%= category %></td><td></td>
+          <td><b><%= category %></b></td><td></td>
           <% year_arr.size.times do %>
             <td></td>
           <% end %>
         </tr>
         <% AnalysisType.where(category: category).order(:sort_by).each do |at| %>
-          <tr>
-            <td><%= ("&nbsp;"*at.tap*4).html_safe %><%= at.name %></td>
-            <td><%= "M RMB" %></td>
+          <tr style="background-color: <%= 'yellow' if at.name == 'Pro-forma FCF' || at.name == 'Per share value' %>">
+            <td><strong><span><%= ("&nbsp;"*at.tap*4).html_safe %><%= at.name.gsub('Average ', '') %></span></strong></td>
+            <td>
+              <% if at.name == "FCF multiples" %>
+                 <%= 'x' %>
+              <% elsif at.name == "Cash rate for NOPLAT" || at.name == 'Premium (Discount)' %>
+                 <%= '%' %>
+              <% elsif at.name == 'Exchange rate' %>
+                  <%=
+                      case @stock.stock_type
+                        when 1
+                            ''
+                        when 2
+                            'HK$/RMB'
+                        when 3
+                            'US$/RMB'
+                      end
+
+                  %>
+              <% elsif at.name == 'ADR to stock ratio' %>
+                <%= 'Ratio' %>
+              <% elsif at.name == 'Shares outstanding' %>
+                <%= 'M' %>
+              <% elsif at.name == 'Per share value' %>
+                <%=
+                    case @stock.stock_type
+                      when 1
+                        'RMB/share'
+                      when 2
+                        'RMB/share'
+                      when 3
+                        'US$/share'
+                    end
+                %>
+              <% elsif at.name == 'Current stock price' %>
+                  <%=
+                      case @stock.stock_type
+                        when 1
+                          'RMB/share'
+                        when 2
+                          'HK$/share'
+                        when 3
+                          'US$/share'
+                      end
+                  %>
+              <% else %>
+                  <%
+                    unit = case @stock.stock_type
+                             when 1
+                                'M RMB'
+                             when 2
+                                'M RMB'
+                             when 3
+                                'M USD'
+                           end
+                  %>
+                  <%= unit %>
+              <% end %>
+            </td>
             <% if at.with_year? %>
                 <% year_arr.each do |year| %>
                     <% val = assessment.assessment_items.where(analysis_type_id: at.id, year: year).first.value %>
-                    <td><%= val == 0.0 ? '-' : val %></td>
+                    <td>
+                      <% if at.name == "Cash rate for NOPLAT" || at.name == 'Premium (Discount)' %>
+                          <%= "#{val*100.0}%" %>
+                      <% else %>
+                          <%= val == 0.0 ? '-' : format("%0.1f",val).to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse %>
+                      <% end %>
+                    </td>
                 <% end %>
             <% else %>
                 <% val = assessment.assessment_items.where(analysis_type_id: at.id).first.value %>
-                <td><%= val == 0.0 ? '-' : val %></td>
+                <td>
+                  <% if at.name == "Cash rate for NOPLAT" || at.name == 'Premium (Discount)' %>
+                      <%= "#{val*100.0}%" %>
+                  <% else %>
+                      <%= val == 0.0 ? '-' : format("%0.2f",val).to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse %>
+                  <% end %>
+                </td>
                 <%= ("<td></td>"*(year_arr.size-1)).html_safe %>
             <% end %>
           </tr>
+          <% if at.name == 'FCF' %>
+              <tr>
+                <td>&nbsp;</td><td></td>
+                <% year_arr.size.times do %>
+                    <td></td>
+                <% end %>
+              </tr>
+              <tr>
+                <td>&nbsp;&nbsp;<%= "#{year_arr.size}-year Average" %></td><td></td>
+                <% year_arr.size.times do %>
+                    <td></td>
+                <% end %>
+              </tr>
+          <% end %>
+          <% if at.calc_expression == 'calc_valuation_cash' || at.name == 'ADR to stock ratio' %>
+              <tr>
+                <td>&nbsp;</td><td></td>
+                <% year_arr.size.times do %>
+                    <td></td>
+                <% end %>
+              </tr>
+          <% end %>
         <% end %>
+        <tr>
+            <td>&nbsp;</td><td></td>
+            <% year_arr.size.times do %>
+                <td></td>
+            <% end %>
+        </tr>
   <% end %>
 </table>

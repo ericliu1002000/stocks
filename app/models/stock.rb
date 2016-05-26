@@ -758,6 +758,8 @@ class Stock < ActiveRecord::Base
                   self.__send__ analysis_type.calc_expression, date, version
                 elsif ps == [:start_year, :end_year, :date, :version]
                   self.__send__ analysis_type.calc_expression, assessment.early_boundary_year, assessment.base_on_year, date, version
+                elsif ps == [:year, :start_year, :version]
+                  self.__send__ analysis_type.calc_expression, year, assessment.early_boundary_year, version
                 end
           item = AssessmentItem.new year: year,
                                      analysis_type_id: analysis_type.id,
@@ -782,6 +784,8 @@ class Stock < ActiveRecord::Base
                 self.__send__ analysis_type.calc_expression, date, version
               elsif ps == [:start_year, :end_year, :date, :version]
                 self.__send__ analysis_type.calc_expression, assessment.early_boundary_year, assessment.base_on_year, date, version
+              elsif ps == [:year, :start_year, :version]
+                self.__send__ analysis_type.calc_expression, assessment.base_on_year, assessment.early_boundary_year, version
               end
         item = AssessmentItem.new year: assessment.base_on_year,
                                   analysis_type_id: analysis_type.id,
@@ -829,7 +833,7 @@ class Stock < ActiveRecord::Base
   end
 
   def calc_receivables year, version
-    self.__send__ "calc_EBIT_#{version}", year
+    self.__send__ "calc_receivables_#{version}", year
   end
 
   def calc_payables year, version
@@ -860,16 +864,16 @@ class Stock < ActiveRecord::Base
     self.__send__ "calc_depreciation_and_amortization_#{version}", year
   end
 
-  def calc_increase_in_working_capital year, version
-    self.__send__ "calc_increase_in_working_capital_#{version}", year
+  def calc_increase_in_working_capital year, start_year, version
+    self.__send__ "calc_increase_in_working_capital_#{version}", year, start_year
   end
 
   def calc_CAPEX year, version
     self.__send__ "calc_CAPEX_#{version}", year
   end
 
-  def calc_FCF year, version
-    self.__send__ "calc_FCF_#{version}", year
+  def calc_FCF year, start_year, version
+    self.__send__ "calc_FCF_#{version}", year, start_year
   end
 
 
@@ -921,6 +925,10 @@ class Stock < ActiveRecord::Base
 
   def calc_shares_outstanding year, version
     self.__send__ "calc_shares_outstanding_#{version}", year
+  end
+
+  def calc_ADR_to_stock_ratio version
+    self.__send__ "calc_ADR_to_stock_ratio_#{version}"
   end
 
   def calc_per_share_value start_year, end_year, version
@@ -1150,10 +1158,17 @@ class Stock < ActiveRecord::Base
     end
   end
 
-  def calc_increase_in_working_capital_100 year
+  def calc_increase_in_working_capital_100 year, start_year
     case stock_type
       when 1
-        (calc_work_capital_100(year) - calc_work_capital_100(year.to_i-1)).round(2)
+        if start_year == year
+          value1 = get_annual_info_by_item_name_and_year "存货的减少", year
+          value2 = get_annual_info_by_item_name_and_year "经营性应收项目的减少", year
+          value3 = get_annual_info_by_item_name_and_year "经营性应付项目的增加", year
+          ((value1 + value2 + value3)/100.0).round(2)
+        else
+          (calc_work_capital_100(year) - calc_work_capital_100(year.to_i-1)).round(2)
+        end
       when 2
         (calc_work_capital_100(year) - calc_work_capital_100(year.to_i-1)).round(2)
       when 3
@@ -1177,8 +1192,8 @@ class Stock < ActiveRecord::Base
     end
   end
 
-  def calc_FCF_100 year
-    (calc_NOPLAT_100(year) - calc_increase_in_working_capital_100(year) - calc_CAPEX_100(year) + calc_depreciation_and_amortization_100(year)).round(2)
+  def calc_FCF_100 year, start_year
+    (calc_NOPLAT_100(year) - calc_increase_in_working_capital_100(year, start_year) - calc_CAPEX_100(year) + calc_depreciation_and_amortization_100(year)).round(2)
   end
 
   def calc_average_FCF_100 start_year, end_year
@@ -1186,7 +1201,7 @@ class Stock < ActiveRecord::Base
     end_year = end_year.to_i
     total = 0.0
     start_year.to_i.upto end_year.to_i do |year|
-      total += calc_FCF_100 year
+      total += calc_FCF_100 year, start_year
     end
     (total/(end_year-start_year+1)).round(2)
   end
@@ -1196,7 +1211,7 @@ class Stock < ActiveRecord::Base
     end_year = end_year.to_i
     total = 0.0
     start_year.to_i.upto end_year.to_i do |year|
-      total += calc_increase_in_working_capital_100 year
+      total += calc_increase_in_working_capital_100 year, start_year
     end
     (total/(end_year-start_year+1)).round(2)
   end
@@ -1275,6 +1290,17 @@ class Stock < ActiveRecord::Base
       when 3
         value = get_annual_info_by_item_name_and_year 'Common Stock', year
         (value/1000.0).round(2)
+    end
+  end
+
+  def calc_ADR_to_stock_ratio_100
+    case stock_type
+      when 1
+        0
+      when 2
+        0
+      when 3
+        2.0
     end
   end
 
