@@ -16,6 +16,13 @@ class StockMarketHistory < ActiveRecord::Base
     end
   end
 
+  # 下载A股id在start_id和end_id之间的股票的所有交易数据
+  # StockMarketHistory.download_a_stock_all_trade_info_between 1, 100
+  def self.download_a_stock_all_trade_info_between start_id, end_id
+    Stock.where(stock_type: 1).where("id >= ? and id < ?", start_id, end_id).each do |stock|
+      self.download_a_stock_all_trade_info stock.id
+    end
+  end
 
   # 下载A股中 某股所有交易数据
   # StockMarketHistory.download_a_stock_all_trade_info 5
