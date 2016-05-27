@@ -5,7 +5,7 @@
   <tr>
     <td width="250px"></td><td width="100px"></td>
       <% year_arr.each do |year| %>
-        <td width="100px"><%= year %></td>
+        <td width="100px" style="text-align: right"><%= year %></td>
       <% end %>
   </tr>
   <% AnalysisType.pluck(:category).uniq.each do |category| %>
@@ -16,8 +16,8 @@
           <% end %>
         </tr>
         <% AnalysisType.where(category: category).order(:sort_by).each do |at| %>
-          <tr style="background-color: <%= 'yellow' if at.name == 'Pro-forma FCF' || at.name == 'Per share value' %>">
-            <td><strong><span><%= ("&nbsp;"*at.tap*4).html_safe %><%= at.name.gsub('Average ', '') %></span></strong></td>
+          <tr>
+            <td <%= 'style=font-weight:bold;' if at.parent_id.blank? && at.tap == 1 && at.name != 'Ennterprise value' %>><%= ("&nbsp;"*at.tap*2).html_safe %><%= at.name.gsub('Average ', '') %></td>
             <td>
               <% if at.name == "FCF multiples" %>
                  <%= 'x' %>
@@ -78,9 +78,11 @@
             <% if at.with_year? %>
                 <% year_arr.each do |year| %>
                     <% val = assessment.assessment_items.where(analysis_type_id: at.id, year: year).first.value %>
-                    <td>
+                    <td style="text-align: right">
                       <% if at.name == "Cash rate for NOPLAT" || at.name == 'Premium (Discount)' %>
-                          <%= "#{val*100.0}%" %>
+                          <%= "#{val*100}%" %>
+                      <% elsif at.name == 'Exchange rate' %>
+                          <%= val %>
                       <% else %>
                           <%= val == 0.0 ? '-' : format("%0.1f",val).to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse %>
                       <% end %>
@@ -88,11 +90,13 @@
                 <% end %>
             <% else %>
                 <% val = assessment.assessment_items.where(analysis_type_id: at.id).first.value %>
-                <td>
+                <td style="text-align: right">
                   <% if at.name == "Cash rate for NOPLAT" || at.name == 'Premium (Discount)' %>
-                      <%= "#{val*100.0}%" %>
+                      <%= "#{(val*100).round(1)}%" %>
+                  <% elsif at.name == 'Exchange rate' %>
+                      <%= val %>
                   <% else %>
-                      <%= val == 0.0 ? '-' : format("%0.2f",val).to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse %>
+                      <%= val == 0.0 ? '-' : format("%0.1f",val).to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse %>
                   <% end %>
                 </td>
                 <%= ("<td></td>"*(year_arr.size-1)).html_safe %>
@@ -106,7 +110,7 @@
                 <% end %>
               </tr>
               <tr>
-                <td>&nbsp;&nbsp;<%= "#{year_arr.size}-year Average" %></td><td></td>
+                <td>&nbsp;&nbsp;<b><%= "#{year_arr.size}-year Average" %></b></td><td></td>
                 <% year_arr.size.times do %>
                     <td></td>
                 <% end %>

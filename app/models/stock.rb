@@ -1153,8 +1153,7 @@ class Stock < ActiveRecord::Base
         (get_annual_info_by_item_name_and_year '折旧', year).round(2)
       when 3
         value1 = get_annual_info_by_item_name_and_year "Depreciation", year
-        value2 = get_annual_info_by_item_name_and_year "Adjustments To Net Income", year
-        ((value1 + value2)/1000.0).round(2)
+        (value1/1000.0).round(2)
     end
   end
 
@@ -1170,7 +1169,12 @@ class Stock < ActiveRecord::Base
           (calc_work_capital_100(year) - calc_work_capital_100(year.to_i-1)).round(2)
         end
       when 2
-        (calc_work_capital_100(year) - calc_work_capital_100(year.to_i-1)).round(2)
+        if start_year == year
+          0
+        else
+          (calc_work_capital_100(year) - calc_work_capital_100(year.to_i-1)).round(2)
+        end
+
       when 3
         value1 = get_annual_info_by_item_name_and_year "Changes In Accounts Receivables", year
         value2 = get_annual_info_by_item_name_and_year "Changes In Liabilities", year
@@ -1185,9 +1189,9 @@ class Stock < ActiveRecord::Base
         value = get_annual_info_by_item_name_and_year '购建固定资产、无形资产和其他长期资产所支付的现金', year
         (value/100.0).round(2)
       when 2
-        (get_annual_info_by_item_name_and_year '购置固定资产款项', year).round(2)
+        -(get_annual_info_by_item_name_and_year '购置固定资产款项', year).round(2)
       when 3
-        value = get_annual_info_by_item_name_and_year 'Capital Expenditures', year
+        value = -(get_annual_info_by_item_name_and_year 'Capital Expenditures', year)
         (value/1000.0).round(2)
     end
   end
@@ -1207,13 +1211,27 @@ class Stock < ActiveRecord::Base
   end
 
   def calc_average_incr_in_working_capital_100 start_year, end_year
-    start_year = start_year.to_i
-    end_year = end_year.to_i
-    total = 0.0
-    start_year.to_i.upto end_year.to_i do |year|
-      total += calc_increase_in_working_capital_100 year, start_year
+    case stock_type
+      when 1
+        start_year = start_year.to_i
+        end_year = end_year.to_i
+        total = 0.0
+        start_year.to_i.upto end_year.to_i do |year|
+          total += calc_increase_in_working_capital_100 year, start_year
+        end
+        (total/(end_year-start_year+1)).round(2)
+      when 2
+        0.02*((calc_revenue_100 end_year) - (calc_revenue_100 end_year - 1))
+      when 3
+        start_year = start_year.to_i
+        end_year = end_year.to_i
+        total = 0.0
+        start_year.to_i.upto end_year.to_i do |year|
+          total += calc_increase_in_working_capital_100 year, start_year
+        end
+        (total/(end_year-start_year+1)).round(2)
     end
-    (total/(end_year-start_year+1)).round(2)
+
   end
 
   def calc_average_CAPEX_100 start_year, end_year
@@ -1311,7 +1329,14 @@ class Stock < ActiveRecord::Base
   def calc_current_stock_price_100 date
     case stock_type
       when 1
-        21.4 # TODO
+        case code
+          when '600309'
+            15.3
+          when '600887'
+            15.1
+          when '000333'
+            21.4
+        end
       when 2
         160.2
       when 3
@@ -1326,7 +1351,7 @@ class Stock < ActiveRecord::Base
       when 2
         (calc_current_stock_price_100(date)*calc_exchange_rate_100/calc_per_share_value_100(start_year, end_year)-1).round(3)
       when 3
-        (calc_current_stock_price_100(date)/calc_per_share_value_100(start_year, end_year) - 1).round(3)
+        (calc_current_stock_price_100(date)/calc_per_share_value_100(start_year, end_year)/calc_ADR_to_stock_ratio_100 - 1).round(3)
     end
   end
 
