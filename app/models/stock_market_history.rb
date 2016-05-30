@@ -147,7 +147,9 @@ class StockMarketHistory < ActiveRecord::Base
         next if index == 0
         td_doc = Nokogiri::HTML tr.to_s
         tds = td_doc.xpath("//td")
-        trade_date = Nokogiri::Slop(tds[0].to_s.encode("utf-8")).td.content.strip.to_date
+        tds0_content = Nokogiri::Slop(tds[0].to_s.encode("utf-8")).td.content.strip
+        next if tds0_content == '暂无数据'
+        trade_date = tds0_content.to_date
         if StockMarketHistory.where(stock_id: stock_id, trade_date: trade_date).blank?
           StockMarketHistory.create! stock_id: stock_id,
                                      trade_date: trade_date,
