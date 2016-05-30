@@ -322,9 +322,43 @@ class Stock < ActiveRecord::Base
     end
   end
 
-  # 从雅虎获得所有中概股的财务信息
+  # 从雅虎获得所有中概股的年报财务信息
   def self.get_all_cn_usa_stocks_info_from_yahoo skip_has_downloaded=false
     Stock.where(stock_type: 3).where("code in (?) ", self::CN_US_STOCKS).each do |stock|
+      self.transaction do
+        next if skip_has_downloaded && stock.download_times>=1
+        StockSummary.all.each do |stock_summary|
+          self.get_usa_stock_info_from_yahoo stock.id, stock_summary.id
+        end
+        stock.download_times += 1
+        stock.save!
+      end
+    end
+  end
+
+  # 指定id区间从雅虎下载美股年报财务信息
+  # Stock.get_usa_stocks_info_from_yahoo_between 1, 100
+  def self.get_usa_stocks_info_from_yahoo_between start_id, end_id, skip_has_downloaded=false
+    Stock.where(stock_type: 3).where("id>= ? and id < ?", start_id, end_id).each do |stock|
+      begin
+        self.transaction do
+          next if skip_has_downloaded && stock.download_times>=1
+          StockSummary.all.each do |stock_summary|
+            self.get_usa_stock_info_from_yahoo stock.id, stock_summary.id
+          end
+          stock.download_times += 1
+          stock.save!
+        end
+      rescue Exception => e
+
+      end
+    end
+  end
+
+  # 从雅虎获得所有美股的年报财务信息
+  # Stock.get_all_usa_stocks_info_from_yahoo
+  def self.get_all_usa_stocks_info_from_yahoo skip_has_downloaded=false
+    Stock.where(stock_type: 3).each do |stock|
       self.transaction do
         next if skip_has_downloaded && stock.download_times>=1
         StockSummary.all.each do |stock_summary|
@@ -345,11 +379,11 @@ class Stock < ActiveRecord::Base
       stock_summary = StockSummary.find(stock_summary_id)
       uri = case stock_summary.name
                     when '资产负债表'
-                      "https://finance.yahoo.com/q/bs?s=#{stock.code}&annual"
+                      "http://finance.yahoo.com/q/bs?s=#{stock.code}&annual"
                     when '利润表'
-                      "https://finance.yahoo.com/q/is?s=#{stock.code}&annual"
+                      "http://finance.yahoo.com/q/is?s=#{stock.code}&annual"
                     when '现金流量表'
-                      "https://finance.yahoo.com/q/cf?s=#{stock.code}&annual"
+                      "http://finance.yahoo.com/q/cf?s=#{stock.code}&annual"
                   end
       # doc = Nokogiri::HTML(open(uri).read.encode("utf-8"))
 
