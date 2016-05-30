@@ -94,7 +94,10 @@ class StockMarketHistory < ActiveRecord::Base
   # StockMarketHistory.download_hk_stock_all_trade_info_between 1, 100
   def self.download_hk_stock_all_trade_info_between start_id, end_id
     Stock.where(stock_type: 2).where("id >= ? and id < ?", start_id, end_id).each do |stock|
+      begin
       self.download_hk_stock_all_trade_info stock.id
+      rescue Exception => e
+      end
     end
   end
 
