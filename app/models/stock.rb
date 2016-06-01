@@ -779,7 +779,7 @@ class Stock < ActiveRecord::Base
 
       assessment.base_on_year.to_i.downto assessment.early_boundary_year.to_i do |year|
         AnalysisType.used.with_year.each do |analysis_type|
-          Exception.raise "#{analysis_type.name}的计算函数为空" if analysis_type.blank?
+          raise "#{analysis_type.name}的计算函数为空" if analysis_type.blank?
           # p_num = self.method(analysis_type.calc_expression.to_sym).arity
           ps = self.method(analysis_type.calc_expression.to_sym).parameters.collect{|x|x.last}
           val = if ps == [:year, :version]
@@ -805,7 +805,7 @@ class Stock < ActiveRecord::Base
       end
 
       AnalysisType.used.without_year.each do |analysis_type|
-        Exception.raise "#{analysis_type.name}的计算函数为空" if analysis_type.blank?
+        raise "#{analysis_type.name}的计算函数为空" if analysis_type.blank?
         # p_num = self.method(analysis_type.calc_expression.to_sym).arity
         ps = self.method(analysis_type.calc_expression.to_sym).parameters.collect{|x|x.last}
         val = if ps == [:year, :version]
@@ -986,8 +986,8 @@ class Stock < ActiveRecord::Base
     .where("stock_data_infos.quarterly_date = ?", "#{year}-12-31")
 
     excption_str = "stock_id:#{self.id},quarterly_date:#{year}-12-31,item_name:#{item_name}"
-    Exception.raise "数据不存在, #{excption_str}" if stock_data_infos.blank?
-    Exception.raise "数据重复, #{excption_str}" if stock_data_infos.count > 1
+    raise "数据不存在, #{excption_str}" if stock_data_infos.blank?
+    raise "数据重复, #{excption_str}" if stock_data_infos.count > 1
 
     stock_data_info = stock_data_infos.first
 
@@ -1361,21 +1361,9 @@ class Stock < ActiveRecord::Base
   end
 
   def calc_current_stock_price_100 date
-    case stock_type
-      when 1
-        case code
-          when '600309'
-            15.3
-          when '600887'
-            15.1
-          when '000333'
-            21.4
-        end
-      when 2
-        160.2
-      when 3
-        23.5
-    end
+    price = StockMarketHistory.where(stock_id: self.id, trade_date: date.to_date).first
+    raise "该股票#{self.name}没有#{date}的股价" if price.blank?
+    price.close_price
   end
 
   def calc_premium_by_discount_100 start_year, end_year, date

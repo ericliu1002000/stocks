@@ -211,7 +211,7 @@ class StockMarketHistory < ActiveRecord::Base
         next if index == 0 || index == 1
         tr_str = tr.to_s.strip.gsub("\r\n", "").gsub(" ", "")
         td = tr_str.match /<tr><td>([\d]*)\/([\d]*)\/([\d]*)<\/td><td>([\d.,]*)<\/td><td>([\d.,]*)<\/td><td>([\d.,]*)<\/td><td>([\d.,]*)<\/td><td>([\d.,]*)<\/td><\/tr>/
-        Exception.raise 'error' if td.size != 9
+        raise 'error' if td.size != 9
         trade_date = "#{td[3]}-#{td[1]}-#{td[2]}"
         if StockMarketHistory.where(stock_id: stock_id, trade_date: trade_date).blank?
           StockMarketHistory.create! stock_id: stock_id,
