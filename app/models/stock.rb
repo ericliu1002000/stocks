@@ -7,6 +7,7 @@ class Stock < ActiveRecord::Base
   require 'pp'
   require 'nokogiri'
   require 'open-uri'
+  require 'csv'
 
   CN_US_STOCKS = ["BSPM", "CNR", "RENN", "JMEI", "CCCR", "YGE", "CGA", "YRD", "BORN", "EFUT", "HOLI", "HIMX", "CPHI", "SFUN", "CLNT", "JRJC", "MOMO", "AUO", "CYD", "CSIQ", "SIMO", "DSWL", "XNY", "NFEC", "SPIL", "NTES", "DANG", "ACTS", "LITB", "JKS", "TSM", "GIGM", "NQ", "CNIT", "CCM", "SOL", "IMOS", "JASO", "UMC", "HPJ", "QIHU", "TSL", "LEJU", "CXDC", "CYOU", "SOHU", "KGJI", "LFC", "TOUR", "DQ", "CHU", "CCCL", "CTRP", "TAOM", "IDI", "SMI", "JD", "CISG", "CHL", "KNDI", "ASX", "JOBS", "SNP", "HTHT", "CEA", "EDU", "ZNH", "CHA", "TEDU", "HNP", "CAAS", "CBPO", "BIDU", "RCON", "GSH", "APWC", "CEO", "FENG", "CADC", "AMC", "XRS", "YY", "SHI", "CHT", "BABA", "YIN", "ATV", "MPEL", "GSOL", "CNTF", "EHIC", "NPD", "PTR", "SINA", "JFC", "FFHL", "LONG", "HIHO", "ALMMF", "AMCF", "CALI", "CCGM", "CCSC", "CDII", "CHGS", "CHLN", "CHOP", "CJJD", "CLWT", "CMFO", "CNYD", "CO", "CPGI", "CPSL", "CSUN", "CTC", "CYDI", "DION", "DL", "EDS", "EGT", "EJ", "GAI", "GOAS", "GPRC", "GRO", "HEAT", "JP", "JST", "KEYP", "KUTV", "LAS", "LIWA", "MY", "NDAC", "NED", "NTE", "OIIM", "QKLS", "SCOK", "SKBI", "SORL", "SUTR", "SVA", "THTI", "TPI", "VALV", "ZA", "ZOOM", "ZX", "KZ", "XIN", "YZC", "VNET", "ACH", "VIPS", "XUE", "WB", "UTSI", "XNET", "MOBI", "CHNR", "SSW", "ATHM", "WUBA", "ALN", "GSI", "KANG", "NCTY", "ZPIN", "AMCN", "SEED", "SYUT", "GURE", "QUNR", "SGOC", "SKYS", "WBAI", "BITA", "ONP", "CREG", "VISN", "HGSH", "CCIH", "CNET", "STV", "EVK", "KONE", "BNSO", "CBAK", "NOAH", "DHRM", "LEDS", "WOWO", "SPU", "ATAI", "CMCM", "SINO", "OSN"]
 
@@ -762,6 +763,29 @@ class Stock < ActiveRecord::Base
   #
   #   File.delete tmp_file_path
   # end
+
+  # 批量生成fcf
+  # Stock.generate_fcf_of_stock_id_between 1, 2
+  def self.generate_fcf_of_stock_id_between start_id, end_id
+    Stock.where("id>= ? and id < ?", start_id, end_id).each do |stock|
+      begin
+          end_year = 2015
+          start_year = stock.stock_type == 3 ? 2013 : 2011
+          price = StockMarketHistory.where(stock_id: stock.id).order(trade_date: :desc).limit(1).first
+          raise "股票#{stock.id} #{stock.code} #{stock.name} 没有任何交易价格" if price.blank?
+          date = price.trade_date
+          version = 100
+          Stock.transaction do
+            stock.generate_fcf start_year, end_year, date, version
+          end
+      rescue Exception => e
+        CSV.open(Rails.root.join("tmp/log.csv").to_s, "ab") do |csv|
+          csv << [stock.code.to_s, stock.name.to_s, e.to_s]
+        end
+      end
+    end
+  end
+
 
   def generate_fcf start_year, end_year, date, version
 
