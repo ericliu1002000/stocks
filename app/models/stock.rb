@@ -1005,9 +1005,19 @@ class Stock < ActiveRecord::Base
   #************************* 动态调用 ⬆️️ **************************************
 
   def get_annual_info_by_item_name_and_year item_name, year
-  stock_data_infos = StockDataInfo.where(stock_id: self.id).joins(:stock_data_item)
-    .where("stock_data_items.name = ? ", item_name)
-    .where("stock_data_infos.quarterly_date = ?", "#{year}-12-31")
+  # stock_data_infos = StockDataInfo.where(stock_id: self.id).joins(:stock_data_item)
+  #   .where("stock_data_items.name = ? ", item_name)
+  #   .where("stock_data_infos.quarterly_date = ?", "#{year}-12-31")
+
+    sql = <<-EOF
+      select * from  (
+	      select * from stock_data_infos where stock_id = #{self.id} and stock_data_infos.quarterly_date = '#{year}-12-31'
+          ) T1 left join stock_data_items on T1.stock_data_item_id = stock_data_items.id
+        where stock_data_items.name = '#{item_name}'
+    EOF
+
+
+    stock_data_infos = StockDataInfo.find_by_sql(sql)
 
     excption_str = "stock_id:#{self.id},quarterly_date:#{year}-12-31,item_name:#{item_name}"
     raise "数据不存在, #{excption_str}" if stock_data_infos.blank?
