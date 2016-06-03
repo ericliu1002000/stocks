@@ -765,8 +765,8 @@ class Stock < ActiveRecord::Base
   # end
 
   # 批量生成fcf
-  # Stock.generate_fcf_of_stock_id_between 1, 2
-  def self.generate_fcf_of_stock_id_between start_id, end_id
+  # Stock.generate_fcf_of_stock_id_between 1, 2, true
+  def self.generate_fcf_of_stock_id_between start_id, end_id, skip_existed=false
     Stock.where("id>= ? and id < ?", start_id, end_id).each do |stock|
       begin
           end_year = 2015
@@ -776,7 +776,7 @@ class Stock < ActiveRecord::Base
           date = price.trade_date
           version = 100
           Stock.transaction do
-            stock.generate_fcf start_year, end_year, date, version
+            stock.generate_fcf start_year, end_year, date, version, skip_existed
           end
       rescue Exception => e
         CSV.open(Rails.root.join("tmp/log.csv").to_s, "ab") do |csv|
@@ -787,10 +787,12 @@ class Stock < ActiveRecord::Base
   end
 
 
-  def generate_fcf start_year, end_year, date, version
+  def generate_fcf start_year, end_year, date, version, skip_existed=false
 
     Stock.transaction do
-      Assessment.where(stock_id: id, base_on_year: end_year, early_boundary_year: start_year, delete_flag: 0).each do |a|
+      assessments = Assessment.where(stock_id: id, base_on_year: end_year, early_boundary_year: start_year, delete_flag: 0)
+      return if skip_existed && !assessments.blank?
+      assessments.each do |a|
         a.delete_flag = 1
         a.save!
       end
@@ -1009,15 +1011,18 @@ class Stock < ActiveRecord::Base
   #   .where("stock_data_items.name = ? ", item_name)
   #   .where("stock_data_infos.quarterly_date = ?", "#{year}-12-31")
 
-    sql = <<-EOF
-      select * from  (
-	      select * from stock_data_infos where stock_id = #{self.id} and stock_data_infos.quarterly_date = '#{year}-12-31'
-          ) T1 left join stock_data_items on T1.stock_data_item_id = stock_data_items.id
-        where stock_data_items.name = '#{item_name}'
-    EOF
+    item_ids = StockDataItem.where(name: item_name).select('id').pluck(:id)
+
+    stock_data_infos = StockDataInfo.where("stock_id = ? and quarterly_date = ? and stock_data_item_id in (?)", self.id, "#{year}-12-31",(item_ids))
+    # sql = <<-EOF
+    #   select * from  (
+	   #    select * from stock_data_infos where stock_id = #{self.id} and stock_data_infos.quarterly_date = '#{year}-12-31'
+    #       ) T1 left join stock_data_items on T1.stock_data_item_id = stock_data_items.id
+    #     where stock_data_items.name = '#{item_name}'
+    # EOF
 
 
-    stock_data_infos = StockDataInfo.find_by_sql(sql)
+    # stock_data_infos = StockDataInfo.find_by_sql(sql)
 
     excption_str = "stock_id:#{self.id},quarterly_date:#{year}-12-31,item_name:#{item_name}"
     raise "数据不存在, #{excption_str}" if stock_data_infos.blank?
