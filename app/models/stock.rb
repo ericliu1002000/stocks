@@ -9,7 +9,7 @@ class Stock < ActiveRecord::Base
   require 'open-uri'
   require 'csv'
 
-  CN_US_STOCKS = ["BSPM", "CNR", "RENN", "JMEI", "CCCR", "YGE", "CGA", "YRD", "BORN", "EFUT", "HOLI", "HIMX", "CPHI", "SFUN", "CLNT", "JRJC", "MOMO", "AUO", "CYD", "CSIQ", "SIMO", "DSWL", "XNY", "NFEC", "SPIL", "NTES", "DANG", "ACTS", "LITB", "JKS", "TSM", "GIGM", "NQ", "CNIT", "CCM", "SOL", "IMOS", "JASO", "UMC", "HPJ", "QIHU", "TSL", "LEJU", "CXDC", "CYOU", "SOHU", "KGJI", "LFC", "TOUR", "DQ", "CHU", "CCCL", "CTRP", "TAOM", "IDI", "SMI", "JD", "CISG", "CHL", "KNDI", "ASX", "JOBS", "SNP", "HTHT", "CEA", "EDU", "ZNH", "CHA", "TEDU", "HNP", "CAAS", "CBPO", "BIDU", "RCON", "GSH", "APWC", "CEO", "FENG", "CADC", "AMC", "XRS", "YY", "SHI", "CHT", "BABA", "YIN", "ATV", "MPEL", "GSOL", "CNTF", "EHIC", "NPD", "PTR", "SINA", "JFC", "FFHL", "LONG", "HIHO", "ALMMF", "AMCF", "CALI", "CCGM", "CCSC", "CDII", "CHGS", "CHLN", "CHOP", "CJJD", "CLWT", "CMFO", "CNYD", "CO", "CPGI", "CPSL", "CSUN", "CTC", "CYDI", "DION", "DL", "EDS", "EGT", "EJ", "GAI", "GOAS", "GPRC", "GRO", "HEAT", "JP", "JST", "KEYP", "KUTV", "LAS", "LIWA", "MY", "NDAC", "NED", "NTE", "OIIM", "QKLS", "SCOK", "SKBI", "SORL", "SUTR", "SVA", "THTI", "TPI", "VALV", "ZA", "ZOOM", "ZX", "KZ", "XIN", "YZC", "VNET", "ACH", "VIPS", "XUE", "WB", "UTSI", "XNET", "MOBI", "CHNR", "SSW", "ATHM", "WUBA", "ALN", "GSI", "KANG", "NCTY", "ZPIN", "AMCN", "SEED", "SYUT", "GURE", "QUNR", "SGOC", "SKYS", "WBAI", "BITA", "ONP", "CREG", "VISN", "HGSH", "CCIH", "CNET", "STV", "EVK", "KONE", "BNSO", "CBAK", "NOAH", "DHRM", "LEDS", "WOWO", "SPU", "ATAI", "CMCM", "SINO", "OSN"]
+  CN_US_STOCKS = ["BSPM", "CNR", "RENN", "JMEI", "CCCR", "YGE", "CGA", "YRD", "BORN", "EFUT", "HOLI", "HIMX", "CPHI", "SFUN", "CLNT", "JRJC", "MOMO", "AUO", "CYD", "CSIQ", "SIMO", "DSWL", "XNY", "NFEC", "SPIL", "NTES", "DANG", "ACTS", "LITB", "JKS", "TSM", "GIGM", "NQ", "CNIT", "CCM", "SOL", "IMOS", "JASO", "UMC", "HPJ", "QIHU", "TSL", "LEJU", "CXDC", "CYOU", "SOHU", "KGJI", "LFC", "TOUR", "DQ", "CHU", "CCCL", "CTRP", "TAOM", "IDI", "SMI", "JD", "CISG", "CHL", "KNDI", "ASX", "JOBS", "SNP", "HTHT", "CEA", "EDU", "ZNH", "CHA", "TEDU", "HNP", "CAAS", "CBPO", "BIDU", "RCON", "GSH", "APWC", "CEO", "FENG", "CADC", "AMC", "XRS", "YY", "SHI", "CHT", "BABA", "YIN", "ATV", "MPEL", "GSOL", "CNTF", "EHIC", "NPD", "PTR", "SINA", "JFC", "FFHL", "LONG", "HIHO", "AMCF", "CALI", "CCGM", "CCSC", "CDII", "CHGS", "CHLN", "CHOP", "CJJD", "CLWT", "CMFO", "CNYD", "CO", "CPGI", "CPSL", "CSUN", "CTC", "CYDI", "DION", "DL", "EDS", "EGT", "EJ", "GAI", "GOAS", "GPRC", "GRO", "HEAT", "JP", "JST", "KEYP", "KUTV", "LAS", "LIWA", "MY", "NDAC", "NED", "NTE", "OIIM", "QKLS", "SCOK", "SKBI", "SORL", "SUTR", "SVA", "THTI", "TPI", "VALV", "ZA", "ZOOM", "ZX", "KZ", "XIN", "YZC", "VNET", "ACH", "VIPS", "XUE", "WB", "UTSI", "XNET", "MOBI", "CHNR", "SSW", "ATHM", "WUBA", "ALN", "GSI", "KANG", "NCTY", "ZPIN", "AMCN", "SEED", "SYUT", "GURE", "QUNR", "SGOC", "SKYS", "WBAI", "BITA", "ONP", "CREG", "VISN", "HGSH", "CCIH", "CNET", "STV", "EVK", "KONE", "BNSO", "CBAK", "NOAH", "DHRM", "LEDS", "WOWO", "SPU", "ATAI", "CMCM", "SINO", "OSN"]
 
   MONEY_UNIT = {
       1 => 'M RMB',
@@ -188,10 +188,10 @@ class Stock < ActiveRecord::Base
     unless t_stock_data_item_id.blank?
       t_stock_data_info = StockDataInfo.where(stock_id: stock_id).where("stock_data_item_id in (?)", t_stock_data_item_id)
 
-      unless t_stock_data_info.blank? # 如果此股、此类型已经抓过，就跳过
-        pp '存在，跳过'
-        return
-      end
+      # unless t_stock_data_info.blank? # 如果此股、此类型已经抓过，就跳过
+      #   pp '存在，跳过'
+      #   return
+      # end
     end
 
 
@@ -303,6 +303,8 @@ class Stock < ActiveRecord::Base
                               monetary_unit: unit,
                               source: '新浪财经',
                               url: uri if stock_data_info.blank? # 指定股票，指定季度，指定数据项  数据不存在，则写数据到数据库
+
+        stock_data_info.first.update_attributes value: row[col_index] if !stock_data_info.blank? && stock_data_info.first.value == 0.0
       end
 
     end
@@ -771,7 +773,9 @@ class Stock < ActiveRecord::Base
       begin
           end_year = 2015
           start_year = stock.stock_type == 3 ? 2013 : 2011
-          price = StockMarketHistory.where(stock_id: stock.id).order(trade_date: :desc).limit(1).first
+          trade_date = StockMarketHistory.where(stock_id: stock.id).maximum(:trade_date)
+          raise "股票#{stock.id} #{stock.code} #{stock.name} 没有任何交易价格" if trade_date.blank?
+          price = StockMarketHistory.where(stock_id: stock.id).where(trade_date: trade_date).first
           raise "股票#{stock.id} #{stock.code} #{stock.name} 没有任何交易价格" if price.blank?
           date = price.trade_date
           version = 100
@@ -1397,7 +1401,7 @@ class Stock < ActiveRecord::Base
   end
 
   def calc_per_share_value_100 start_year, end_year
-    (calc_equity_value_100(start_year, end_year)/calc_shares_outstanding_100(end_year)).round(2)
+    (calc_equity_value_100(start_year, end_year)/calc_shares_outstanding_100(end_year)).round(5)
   end
 
   def calc_current_stock_price_100 date
