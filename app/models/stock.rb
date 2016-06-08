@@ -800,7 +800,8 @@ class Stock < ActiveRecord::Base
                      base_on_year: end_year,
                      early_boundary_year: start_year,
                      algorithm_name: version,
-                     delete_flag: 0
+                     delete_flag: 0,
+                     price_date: date
       assessment.save!
 
       assessment.base_on_year.to_i.downto assessment.early_boundary_year.to_i do |year|
