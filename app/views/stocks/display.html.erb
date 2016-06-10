@@ -2,7 +2,7 @@
 
 <% sds = StockDataInfo.where(quarterly_date: @quarterly_date, stock_id: stock.id) %>
 <% sds = sds.joins(:stock_data_item) %>
-<% sds = sds.where("stock_data_items.stock_summary_id = ?", 1) %>
+<% sds = sds.where("stock_data_items.stock_summary_id = ?", 2).where(source: '谷歌财经') %>
 <table>
   <th></th><th><%= @quarterly_date %></th>
   <% sds.each do |sd| %>

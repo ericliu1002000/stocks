@@ -446,6 +446,110 @@ class Stock < ActiveRecord::Base
       end
   end
 
+  # http://www.google.com/finance?q=JD&fstype=ii
+  def self.get_usa_stock_info_from_google stock_id
+    stock = Stock.find(stock_id)
+    uri = "http://www.google.com/finance?q=#{stock.code}&fstype=ii"
+    response = RestClient.get uri
+    doc = Nokogiri::HTML(response)
+
+    incannualdiv = doc.at_css(".id-incannualdiv")
+    balannualdiv = doc.at_css(".id-balannualdiv")
+    casannualdiv = doc.at_css(".id-casannualdiv")
+    return if incannualdiv.blank? && balannualdiv.blank? && casannualdiv.blank?
+
+    self.handle_from_google_by_div incannualdiv, StockSummary.find_by_name('利润表').id, stock, uri
+    self.handle_from_google_by_div balannualdiv, StockSummary.find_by_name('资产负债表').id, stock, uri
+    self.handle_from_google_by_div casannualdiv, StockSummary.find_by_name('现金流量表').id, stock, uri
+  end
+
+  def self.handle_from_google_by_div div, summary_id, stock, uri
+    incannual_table = div.css("table")
+    quarterly_date_arr = []
+    unit = ''
+    incannual_table.css("tr").each_with_index do |tr, index|
+
+      if index == 0
+        tr.css("th").each_with_index do |th, ind|
+          if ind == 0
+            unit = th.content.strip
+            unit = unit[3..unit.index("(")-1]
+            next
+          end
+          d = th.content.strip.match(/([\d]{4}-[\d]{2}-[\d]{2})/)[1]
+          raise "有问题，stock_id:#{stock_id}, income, 年报, 第一列:#{th.to_s}" if d.blank? || d.size != 10
+          quarterly_date_arr << d
+        end
+        next
+      end
+
+      item_id = nil
+      item_name = ''
+      tr.css("td").each_with_index do |td, ind|
+        if ind == 0
+          item_name = td.content.strip
+          stock_data_item = StockDataItem.find_or_create_by stock_summary_id: summary_id,
+                                                            name: item_name,
+                                                            category: nil
+          item_id = stock_data_item.id
+          next
+        end
+
+        c_unit = if item_name.include? 'per Share'
+                   unit.gsub("Millions of ", "").strip
+                 else
+                   unit
+                 end
+        stock_data_info = StockDataInfo.where(stock_id: stock.id, stock_data_item_id: item_id, quarterly_date: quarterly_date_arr[ind-1], source: '谷歌财经')
+        val = td.content.strip.gsub(',','').gsub("  ","")
+        val = "-#{val.gsub("(","").gsub(")","").gsub(" ","")}" if val.include?("(") && val.include?(")")
+        if stock_data_info.blank?
+          StockDataInfo.create! stock_id: stock.id,
+                                stock_data_item_id: item_id,
+                                quarterly_date: quarterly_date_arr[ind-1],
+                                stock_code: stock.code,
+                                value: val.to_f,
+                                monetary_unit: c_unit,
+                                source: '谷歌财经',
+                                url: uri,
+                                item_name: item_name
+        else
+          return
+        end
+      end
+
+    end
+  end
+
+  def self.check_us_stock_from_google dijige
+    all_us_stocks = Stock.where(stock_type: 3)
+    total = all_us_stocks.count
+    success = 0
+    fail = 0
+    all_us_stocks[dijige..total-1].each_with_index do |stock, index|
+      pp index
+      uri = "http://www.google.com/finance?q=#{stock.code}&fstype=ii"
+      response = RestClient.get uri
+      doc = Nokogiri::HTML(response)
+
+      incannualdiv = doc.at_css(".id-incannualdiv")
+      balannualdiv = doc.at_css(".id-balannualdiv")
+      casannualdiv = doc.at_css(".id-casannualdiv")
+      if incannualdiv.blank? && balannualdiv.blank? && casannualdiv.blank?
+        pp "#{index}  失败"
+        CSV.open(Rails.root.join("tmp/us_none_data_stock.csv").to_s, "ab") do |csv|
+          csv << [stock.code.to_s, stock.name.to_s]
+        end
+        fail += 1
+        pp "###################### 失败#{fail}个 #######     当前第#{index}"
+        next
+      end
+      pp "#{index}  成功"
+      success += 1
+      pp "###################### 失败#{fail}个 #######     当前第#{index}"
+    end
+    "total:#{total}   success:#{success}"
+  end
 
   # 从新浪获得某只港股的财务信息
   # def self.get_hk_stock_info_from_sinabak stock_id
