@@ -446,6 +446,20 @@ class Stock < ActiveRecord::Base
       end
   end
 
+  def self.get_all_us_stock_info_from_google_between start_id, end_id
+    Stock.where("id >= ? and id <= ?", start_id, end_id).where(stock_type: 3).each do |stock|
+      begin
+        self.transaction do
+          self.get_usa_stock_info_from_google stock.id
+        end
+      rescue Exception=>e
+        CSV.open(Rails.root.join("tmp/us_stock_download_error.csv").to_s, "ab") do |csv|
+          csv << [stock.code.to_s, stock.name.to_s, e.to_s]
+        end
+      end
+    end
+  end
+
   # http://www.google.com/finance?q=JD&fstype=ii
   def self.get_usa_stock_info_from_google stock_id
     stock = Stock.find(stock_id)
