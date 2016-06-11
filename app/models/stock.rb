@@ -462,6 +462,8 @@ class Stock < ActiveRecord::Base
 
   # http://www.google.com/finance?q=JD&fstype=ii
   def self.get_usa_stock_info_from_google stock_id
+    stock_data_infos_count = StockDataInfo.where(stock_id: stock_id, source: '谷歌财经').count
+    return if stock_data_infos_count > 0
     stock = Stock.find(stock_id)
     uri = "http://www.google.com/finance?q=#{stock.code}&fstype=ii"
     response = RestClient.get uri
