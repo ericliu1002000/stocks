@@ -465,13 +465,22 @@ class Stock < ActiveRecord::Base
     stock_data_infos_count = StockDataInfo.where(stock_id: stock_id, source: '谷歌财经').count
     return if stock_data_infos_count > 0
     stock = Stock.find(stock_id)
-    uri = "http://www.google.com/finance?q=#{stock.code}&fstype=ii"
-    response = RestClient.get uri
-    doc = Nokogiri::HTML(response)
 
-    incannualdiv = doc.at_css(".id-incannualdiv")
-    balannualdiv = doc.at_css(".id-balannualdiv")
-    casannualdiv = doc.at_css(".id-casannualdiv")
+    incannualdiv = ''
+    balannualdiv = ''
+    casannualdiv = ''
+
+    ["","NYSE%3A","NYSEMKT%3A","OTCMKTS%3A","TSE%3A"].each do |key|
+      uri = "http://www.google.com/finance?q=#{key}#{stock.code}&fstype=ii"
+      response = RestClient.get uri
+      doc = Nokogiri::HTML(response)
+
+      incannualdiv = doc.at_css(".id-incannualdiv")
+      balannualdiv = doc.at_css(".id-balannualdiv")
+      casannualdiv = doc.at_css(".id-casannualdiv")
+      break if !incannualdiv.blank?
+    end
+
     return if incannualdiv.blank? && balannualdiv.blank? && casannualdiv.blank?
 
     self.handle_from_google_by_div incannualdiv, StockSummary.find_by_name('利润表').id, stock, uri
