@@ -909,6 +909,80 @@ class Stock < ActiveRecord::Base
   end
 
 
+  def usa_stock_data_from_google_generate_fcf date, version, skip_existed=false
+    Stock.transaction do
+      sdis = StockDataInfo.where(stock_id: self.id, source: '谷歌财经').order(:stock_data_item_id, :quarterly_date).limit(4)
+      if sdis.blank?
+        pp "该股票 #{self.code},#{self.name}在谷歌上没有财经数据"
+        return
+      end
+      quarterly_date_arr = sdis.pluck(:quarterly_date)
+      assessments = Assessment.where(stock_id: id, base_on_year: quarterly_date_arr.last.to_date.year, early_boundary_year: quarterly_date_arr.first.to_date.year, delete_flag: 0)
+      return if skip_existed && !assessments.blank?
+      assessments.each do |a|
+        a.delete_flag = 1
+        a.save!
+      end
+      assessment = Assessment.new stock_id: id,
+                                  base_on_year: quarterly_date_arr.last.to_date.year,
+                                  early_boundary_year: quarterly_date_arr.first.to_date.year,
+                                  delete_flag: 0,
+                                  price_date: date
+      assessment.save!
+      quarterly_date_arr.each do |quarterly_date|
+        AnalysisType.used.with_year.each do |analysis_type|
+          raise "#{analysis_type.name}的计算函数为空" if analysis_type.calc_expression.blank?
+          ps = self.method(analysis_type.calc_expression.to_sym).parameters.collect{|x|x.last}
+          val = if ps == [:year, :version]
+                  self.__send__ analysis_type.calc_expression, quarterly_date, version
+                elsif ps == [:start_year, :end_year, :version]
+                  self.__send__ analysis_type.calc_expression, quarterly_date_arr.first.to_date, quarterly_date_arr.last.to_date, version
+                elsif ps == [:version]
+                  self.__send__ analysis_type.calc_expression, version
+                elsif ps == [:date, :version]
+                  self.__send__ analysis_type.calc_expression, date, version
+                elsif ps == [:start_year, :end_year, :date, :version]
+                  self.__send__ analysis_type.calc_expression, quarterly_date_arr.first.to_date, quarterly_date_arr.last.to_date, date, version
+                elsif ps == [:year, :start_year, :version]
+                  self.__send__ analysis_type.calc_expression, quarterly_date, quarterly_date_arr.first.to_date, version
+                end
+          item = AssessmentItem.new year: quarterly_date.to_date.year,
+                                    analysis_type_id: analysis_type.id,
+                                    assessment_id: assessment.id,
+                                    money_unit: Stock::MONEY_UNIT[stock_type],
+                                    value: val
+          item.save!
+        end
+      end
+
+      AnalysisType.used.without_year.each do |analysis_type|
+        raise "#{analysis_type.name}的计算函数为空" if analysis_type.calc_expression.blank?
+        ps = self.method(analysis_type.calc_expression.to_sym).parameters.collect{|x|x.last}
+        val = if ps == [:year, :version]
+                self.__send__ analysis_type.calc_expression, quarterly_date_arr.last.to_date, version
+              elsif ps == [:start_year, :end_year, :version]
+                self.__send__ analysis_type.calc_expression, quarterly_date_arr.first.to_date, quarterly_date_arr.last.to_date, version
+              elsif ps == [:version]
+                self.__send__ analysis_type.calc_expression, version
+              elsif ps == [:date, :version]
+                self.__send__ analysis_type.calc_expression, date, version
+              elsif ps == [:start_year, :end_year, :date, :version]
+                self.__send__ analysis_type.calc_expression, quarterly_date_arr.first.to_date, quarterly_date_arr.last.to_date, date, version
+              elsif ps == [:year, :start_year, :version]
+                self.__send__ analysis_type.calc_expression, quarterly_date_arr.first.to_date, quarterly_date_arr.last.to_date, version
+              end
+        item = AssessmentItem.new year: assessment.base_on_year,
+                                  analysis_type_id: analysis_type.id,
+                                  assessment_id: assessment.id,
+                                  money_unit: Stock::MONEY_UNIT[stock_type],
+                                  value: val
+        item.save!
+      end
+
+    end
+  end
+
+
   def generate_fcf start_year, end_year, date, version, skip_existed=false
 
     Stock.transaction do
@@ -928,7 +1002,7 @@ class Stock < ActiveRecord::Base
 
       assessment.base_on_year.to_i.downto assessment.early_boundary_year.to_i do |year|
         AnalysisType.used.with_year.each do |analysis_type|
-          raise "#{analysis_type.name}的计算函数为空" if analysis_type.blank?
+          raise "#{analysis_type.name}的计算函数为空" if analysis_type.calc_expression.blank?
           # p_num = self.method(analysis_type.calc_expression.to_sym).arity
           ps = self.method(analysis_type.calc_expression.to_sym).parameters.collect{|x|x.last}
           val = if ps == [:year, :version]
@@ -954,7 +1028,7 @@ class Stock < ActiveRecord::Base
       end
 
       AnalysisType.used.without_year.each do |analysis_type|
-        raise "#{analysis_type.name}的计算函数为空" if analysis_type.blank?
+        raise "#{analysis_type.name}的计算函数为空" if analysis_type.calc_expression.blank?
         # p_num = self.method(analysis_type.calc_expression.to_sym).arity
         ps = self.method(analysis_type.calc_expression.to_sym).parameters.collect{|x|x.last}
         val = if ps == [:year, :version]
@@ -1136,7 +1210,12 @@ class Stock < ActiveRecord::Base
 
     item_ids = StockDataItem.where(name: item_name).select('id').pluck(:id)
 
-    stock_data_infos = StockDataInfo.where("stock_id = ? and quarterly_date = ? and stock_data_item_id in (?)", self.id, "#{year}-12-31",(item_ids))
+    year = if year.match /[\d]{4}-[\d]{2}-[\d]{2}/
+             year
+           else
+             "#{year}-12-31"
+           end
+    stock_data_infos = StockDataInfo.where("stock_id = ? and quarterly_date = ? and stock_data_item_id in (?)", self.id, year, (item_ids))
     # sql = <<-EOF
     #   select * from  (
 	   #    select * from stock_data_infos where stock_id = #{self.id} and stock_data_infos.quarterly_date = '#{year}-12-31'
