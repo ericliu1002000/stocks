@@ -469,7 +469,7 @@ class Stock < ActiveRecord::Base
     incannualdiv = ''
     balannualdiv = ''
     casannualdiv = ''
-
+    uri = ''
     ["","NYSE%3A","NYSEMKT%3A","OTCMKTS%3A","TSE%3A"].each do |key|
       uri = "http://www.google.com/finance?q=#{key}#{stock.code}&fstype=ii"
       response = RestClient.get uri
