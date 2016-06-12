@@ -909,7 +909,12 @@ class Stock < ActiveRecord::Base
           date = price.trade_date
           version = 100
           Stock.transaction do
-            stock.generate_fcf start_year, end_year, date, version, skip_existed
+            case stock.stock_type
+              when 3
+                stock.usa_stock_data_from_google_generate_fcf date.to_s, version, skip_existed
+              else
+                stock.generate_fcf start_year, end_year, date, version, skip_existed
+            end
           end
       rescue Exception => e
         CSV.open(Rails.root.join("tmp/log.csv").to_s, "ab") do |csv|
@@ -922,12 +927,13 @@ class Stock < ActiveRecord::Base
 
   def usa_stock_data_from_google_generate_fcf date, version, skip_existed=false
     Stock.transaction do
-      sdis = StockDataInfo.where(stock_id: self.id, source: '谷歌财经').order(:stock_data_item_id, :quarterly_date).limit(4)
+      sdis = StockDataInfo.where(stock_id: self.id, source: '谷歌财经').order(:quarterly_date)
       if sdis.blank?
         pp "该股票 #{self.code},#{self.name}在谷歌上没有财经数据"
         return
       end
-      quarterly_date_arr = sdis.pluck(:quarterly_date)
+      unit = sdis.first.monetary_unit.gsub("Millions of", "M")
+      quarterly_date_arr = sdis.pluck(:quarterly_date).uniq
       assessments = Assessment.where(stock_id: id, base_on_year: quarterly_date_arr.last.to_date.year, early_boundary_year: quarterly_date_arr.first.to_date.year, delete_flag: 0)
       return if skip_existed && !assessments.blank?
       assessments.each do |a|
@@ -960,7 +966,7 @@ class Stock < ActiveRecord::Base
           item = AssessmentItem.new year: quarterly_date.to_date.year,
                                     analysis_type_id: analysis_type.id,
                                     assessment_id: assessment.id,
-                                    money_unit: Stock::MONEY_UNIT[stock_type],
+                                    money_unit: unit,
                                     value: val
           item.save!
         end
@@ -985,7 +991,7 @@ class Stock < ActiveRecord::Base
         item = AssessmentItem.new year: assessment.base_on_year,
                                   analysis_type_id: analysis_type.id,
                                   assessment_id: assessment.id,
-                                  money_unit: Stock::MONEY_UNIT[stock_type],
+                                  money_unit: unit,
                                   value: val
         item.save!
       end
@@ -1221,12 +1227,19 @@ class Stock < ActiveRecord::Base
 
     item_ids = StockDataItem.where(name: item_name).select('id').pluck(:id)
 
-    year = if year.match /[\d]{4}-[\d]{2}-[\d]{2}/
+    year = if year.to_s.match /[\d]{4}-[\d]{2}-[\d]{2}/
              year
            else
              "#{year}-12-31"
            end
-    stock_data_infos = StockDataInfo.where("stock_id = ? and quarterly_date = ? and stock_data_item_id in (?)", self.id, year, (item_ids))
+    stock_data_infos =
+        case stock_type
+          when 3
+            StockDataInfo.where("stock_id = ? and quarterly_date = ? and stock_data_item_id in (?) and source = ? ", self.id, year, (item_ids), '谷歌财经')
+          else
+            StockDataInfo.where("stock_id = ? and quarterly_date = ? and stock_data_item_id in (?)", self.id, year, (item_ids))
+        end
+
     # sql = <<-EOF
     #   select * from  (
 	   #    select * from stock_data_infos where stock_id = #{self.id} and stock_data_infos.quarterly_date = '#{year}-12-31'
@@ -1237,7 +1250,7 @@ class Stock < ActiveRecord::Base
 
     # stock_data_infos = StockDataInfo.find_by_sql(sql)
 
-    excption_str = "stock_id:#{self.id},quarterly_date:#{year}-12-31,item_name:#{item_name}"
+    excption_str = "stock_id:#{self.id},quarterly_date:#{year},item_name:#{item_name}"
     raise "数据不存在, #{excption_str}" if stock_data_infos.blank?
     raise "数据重复, #{excption_str}" if stock_data_infos.count > 1
 
@@ -1257,7 +1270,7 @@ class Stock < ActiveRecord::Base
         (get_annual_info_by_item_name_and_year '营业额', year).round(2)
       when 3
         value = get_annual_info_by_item_name_and_year 'Total Revenue', year
-        (value/1000.0).round(2)
+        value.round(2)
     end
 
   end
@@ -1270,8 +1283,8 @@ class Stock < ActiveRecord::Base
       when 2
         (get_annual_info_by_item_name_and_year '销售成本', year).round(2)
       when 3
-        value = get_annual_info_by_item_name_and_year 'Cost of Revenue', year
-        (value/1000.0).round(2)
+        value = get_annual_info_by_item_name_and_year 'Cost of Revenue, Total', year
+        value.round(2)
     end
 
   end
@@ -1287,9 +1300,9 @@ class Stock < ActiveRecord::Base
         value2 = get_annual_info_by_item_name_and_year '一般及行政费用', year
         (value1 + value2).round(2)
       when 3
-        value1 = get_annual_info_by_item_name_and_year 'Research Development', year
-        value2 = get_annual_info_by_item_name_and_year 'Selling General and Administrative', year
-        (value1/1000.0 + value2/1000.0).round(2)
+        value1 = get_annual_info_by_item_name_and_year 'Research & Development', year
+        value2 = get_annual_info_by_item_name_and_year 'Selling/General/Admin. Expenses, Total', year
+        (value1 + value2).round(2)
     end
   end
 
@@ -1301,8 +1314,8 @@ class Stock < ActiveRecord::Base
       when 2
         0
       when 3
-        value = get_annual_info_by_item_name_and_year 'Others', year
-        (value/1000.0).round(2)
+        value = get_annual_info_by_item_name_and_year 'Other Operating Expenses, Total', year
+        value.round(2)
     end
   end
 
@@ -1313,8 +1326,7 @@ class Stock < ActiveRecord::Base
       when 2
         (calc_revenue_100(year) - calc_COGS_100(year) - calc_SGA_100(year) - calc_other_costs_100(year)).round(2)
       when 3
-        value = get_annual_info_by_item_name_and_year 'Earnings Before Interest And Taxes', year
-        (value/1000.0).round(2)
+        (calc_revenue_100(year) - calc_COGS_100(year) - calc_SGA_100(year) - calc_other_costs_100(year)).round(2)
     end
   end
 
@@ -1330,8 +1342,8 @@ class Stock < ActiveRecord::Base
       when 2
         (get_annual_info_by_item_name_and_year '现金及银行结存(流动资产)', year).round(2)
       when 3
-        value = get_annual_info_by_item_name_and_year 'Cash And Cash Equivalents', year
-        (value/1000).round(2)
+        value = get_annual_info_by_item_name_and_year 'Cash & Equivalents', year
+        value.round(2)
     end
   end
 
@@ -1343,8 +1355,8 @@ class Stock < ActiveRecord::Base
       when 2
         (get_annual_info_by_item_name_and_year '存货(流动资产)', year).round(2)
       when 3
-        value = get_annual_info_by_item_name_and_year 'Inventory', year
-        (value/1000).round(2)
+        value = get_annual_info_by_item_name_and_year 'Total Inventory', year
+        value.round(2)
     end
   end
 
@@ -1391,9 +1403,8 @@ class Stock < ActiveRecord::Base
       when 2
         (get_annual_info_by_item_name_and_year '银行贷款(流动负债)', year).round(2)
       when 3
-        value1 = get_annual_info_by_item_name_and_year 'Short/Current Long Term Debt', year
-        value2 = get_annual_info_by_item_name_and_year 'Long Term Debt', year
-        (value1/1000.0-value2/1000).round(2)
+        value1 = get_annual_info_by_item_name_and_year 'Notes Payable/Short Term Debt', year
+        value1.round(2)
     end
   end
 
@@ -1406,7 +1417,7 @@ class Stock < ActiveRecord::Base
         0
       when 3
         value = get_annual_info_by_item_name_and_year 'Long Term Debt', year
-        (value/1000).round(2)
+        value.round(2)
     end
   end
 
@@ -1438,8 +1449,8 @@ class Stock < ActiveRecord::Base
       when 2
         (get_annual_info_by_item_name_and_year '折旧', year).round(2)
       when 3
-        value1 = get_annual_info_by_item_name_and_year "Depreciation", year
-        (value1/1000.0).round(2)
+        value1 = get_annual_info_by_item_name_and_year "Depreciation/Depletion", year
+        value1.round(2)
     end
   end
 
@@ -1462,10 +1473,8 @@ class Stock < ActiveRecord::Base
         end
 
       when 3
-        value1 = get_annual_info_by_item_name_and_year "Changes In Accounts Receivables", year
-        value2 = get_annual_info_by_item_name_and_year "Changes In Liabilities", year
-        value3 = get_annual_info_by_item_name_and_year "Changes In Inventories", year
-        ((value1 + value2 + value3)/1000.0).round(2)
+        value1 = get_annual_info_by_item_name_and_year "Changes in Working Capital", year
+        value1.round(2)
     end
   end
 
@@ -1478,7 +1487,7 @@ class Stock < ActiveRecord::Base
         -(get_annual_info_by_item_name_and_year '购置固定资产款项', year).round(2)
       when 3
         value = -(get_annual_info_by_item_name_and_year 'Capital Expenditures', year)
-        (value/1000.0).round(2)
+        value.round(2)
     end
   end
 
@@ -1487,13 +1496,24 @@ class Stock < ActiveRecord::Base
   end
 
   def calc_average_FCF_100 start_year, end_year
-    start_year = start_year.to_i
-    end_year = end_year.to_i
-    total = 0.0
-    start_year.to_i.upto end_year.to_i do |year|
-      total += calc_FCF_100 year, start_year
+    case stock_type
+      when 3
+        sdis = StockDataInfo.where(stock_id: self.id, source: '谷歌财经').order(:quarterly_date)
+        quarterly_date_arr = sdis.pluck(:quarterly_date).uniq
+        total = 0.0
+        quarterly_date_arr.each do |q|
+          total += calc_FCF_100 q, start_year
+        end
+        (total/quarterly_date_arr.size).round(2)
+      else
+        start_year = start_year.to_i
+        end_year = end_year.to_i
+        total = 0.0
+        start_year.to_i.upto end_year.to_i do |year|
+          total += calc_FCF_100 year, start_year
+        end
+        (total/(end_year-start_year+1)).round(2)
     end
-    (total/(end_year-start_year+1)).round(2)
   end
 
   def calc_average_incr_in_working_capital_100 start_year, end_year
@@ -1509,25 +1529,36 @@ class Stock < ActiveRecord::Base
       when 2
         0.02*((calc_revenue_100 end_year) - (calc_revenue_100 end_year - 1))
       when 3
-        start_year = start_year.to_i
-        end_year = end_year.to_i
+        sdis = StockDataInfo.where(stock_id: self.id, source: '谷歌财经').order(:quarterly_date)
+        quarterly_date_arr = sdis.pluck(:quarterly_date).uniq
         total = 0.0
-        start_year.to_i.upto end_year.to_i do |year|
-          total += calc_increase_in_working_capital_100 year, start_year
+        quarterly_date_arr.each do |q|
+          total += calc_increase_in_working_capital_100 q, start_year
         end
-        (total/(end_year-start_year+1)).round(2)
+        (total/quarterly_date_arr.size).round(2)
     end
 
   end
 
   def calc_average_CAPEX_100 start_year, end_year
-    start_year = start_year.to_i
-    end_year = end_year.to_i
-    total = 0.0
-    start_year.to_i.upto end_year.to_i do |year|
-      total += calc_CAPEX_100 year
+    case stock_type
+      when 3
+        sdis = StockDataInfo.where(stock_id: self.id, source: '谷歌财经').order(:quarterly_date)
+        quarterly_date_arr = sdis.pluck(:quarterly_date).uniq
+        total = 0.0
+        quarterly_date_arr.each do |q|
+          total += calc_CAPEX_100 q
+        end
+        (total/quarterly_date_arr.size).round(2)
+      else
+        start_year = start_year.to_i
+        end_year = end_year.to_i
+        total = 0.0
+        start_year.to_i.upto end_year.to_i do |year|
+          total += calc_CAPEX_100 year
+        end
+        (total/(end_year-start_year+1)).round(2)
     end
-    (total/(end_year-start_year+1)).round(2)
   end
 
   def calc_pro_forma_FCF_100 start_year, end_year
@@ -1564,7 +1595,13 @@ class Stock < ActiveRecord::Base
       when 2
         0.84
       when 3
-        6.53
+        sdis = StockDataInfo.where(stock_id: self.id, source: '谷歌财经').order(:stock_data_item_id, :quarterly_date).limit(4)
+        unit = sdis.first.monetary_unit.gsub("Millions of", "").strip
+        response = RestClient.get "http://apis.baidu.com/apistore/currencyservice/currency?fromCurrency=#{unit}&toCurrency=USD&amount=1", {:apikey => '3944403610171942d0bc91b9c45e74b4'}
+        response = response.body
+        response = JSON.parse response
+        raise "#{unit} 转换成 USD失败" if response["errNum"] == -1
+        (1/response["retData"]["convertedamount"]).round(2)
     end
   end
 
@@ -1592,8 +1629,8 @@ class Stock < ActiveRecord::Base
       when 2
         ((get_annual_info_by_item_name_and_year '股份数目(香港)', year)/1000000.0).round(2)
       when 3
-        value = get_annual_info_by_item_name_and_year 'Common Stock', year
-        (value/1000.0).round(2)
+        value = get_annual_info_by_item_name_and_year 'Total Common Shares Outstanding', year
+        value.round(2)
     end
   end
 
@@ -1604,12 +1641,12 @@ class Stock < ActiveRecord::Base
       when 2
         0
       when 3
-        2.0
+        1
     end
   end
 
   def calc_per_share_value_100 start_year, end_year
-    (calc_equity_value_100(start_year, end_year)/calc_shares_outstanding_100(end_year)).round(5)
+    (calc_equity_value_100(start_year, end_year)/calc_shares_outstanding_100(end_year)/calc_exchange_rate_100).round(5)
   end
 
   def calc_current_stock_price_100 date

@@ -1,7 +1,11 @@
 <h3><%= "#{@stock.name}(#{@stock.code})" %></h3>
 <% assessment = @stock.assessments.valid.first %>
+<%
+   sdis = StockDataInfo.where(stock_id: @stock.id, source: '谷歌财经').order(:quarterly_date)
+   common_unit = sdis.first.monetary_unit.gsub("Millions of", "M")
+%>
 <table>
-  <% year_arr = assessment.assessment_items.pluck(:year).uniq %>
+  <% year_arr = assessment.assessment_items.order(year: :desc).pluck(:year).uniq %>
   <tr>
     <td width="250px"></td><td width="100px"></td>
       <% year_arr.each do |year| %>
@@ -31,7 +35,8 @@
                         when 2
                             'HK$/RMB'
                         when 3
-                            'US$/RMB'
+                          sdis = StockDataInfo.where(stock_id: @stock.id, source: '谷歌财经').order(:quarterly_date)
+                          "US$/#{sdis.first.monetary_unit.gsub("Millions of", "")}"
                       end
 
                   %>
@@ -69,7 +74,7 @@
                              when 2
                                 'M RMB'
                              when 3
-                                'M USD'
+                               common_unit
                            end
                   %>
                   <%= unit %>
