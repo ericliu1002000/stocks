@@ -1236,7 +1236,9 @@ class Stock < ActiveRecord::Base
     stock_data_infos =
         case stock_type
           when 3
-            StockDataInfo.where("stock_id = ? and quarterly_date = ? and stock_data_item_id in (?) and source = ? ", self.id, year, (item_ids), '谷歌财经')
+            t = StockDataInfo.where("stock_id = ? and quarterly_date = ? and stock_data_item_id in (?) and source = ? ", self.id, year, (item_ids), '谷歌财经')
+            t = StockDataInfo.where("stock_id = ? and quarterly_date = ? and stock_data_item_id in (?) and source = ? ", self.id, year, (item_ids), '雅虎财经') if t.blank?
+            t
           else
             StockDataInfo.where("stock_id = ? and quarterly_date = ? and stock_data_item_id in (?)", self.id, year, (item_ids))
         end
