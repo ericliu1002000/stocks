@@ -934,7 +934,7 @@ class Stock < ActiveRecord::Base
       end
       unit = sdis.first.monetary_unit.gsub("Millions of", "M")
       quarterly_date_arr = sdis.pluck(:quarterly_date).uniq
-      assessments = Assessment.where(stock_id: id, base_on_year: quarterly_date_arr.last.to_date.year, early_boundary_year: quarterly_date_arr.first.to_date.year, delete_flag: 0)
+      assessments = Assessment.where(stock_id: id, delete_flag: 0)
       return if skip_existed && !assessments.blank?
       assessments.each do |a|
         a.delete_flag = 1
@@ -943,6 +943,7 @@ class Stock < ActiveRecord::Base
       assessment = Assessment.new stock_id: id,
                                   base_on_year: quarterly_date_arr.last.to_date.year,
                                   early_boundary_year: quarterly_date_arr.first.to_date.year,
+                                  algorithm_name: version,
                                   delete_flag: 0,
                                   price_date: date
       assessment.save!
