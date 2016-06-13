@@ -446,8 +446,27 @@ class Stock < ActiveRecord::Base
       end
   end
 
+
+  # 从谷歌财经下载美股的财务数据
+  # Stock.get_all_us_stock_info_from_google_between 1,3
   def self.get_all_us_stock_info_from_google_between start_id, end_id
     Stock.where("id >= ? and id <= ?", start_id, end_id).where(stock_type: 3).each do |stock|
+      begin
+        self.transaction do
+          self.get_usa_stock_info_from_google stock.id
+        end
+      rescue Exception=>e
+        CSV.open(Rails.root.join("tmp/us_stock_download_error.csv").to_s, "ab") do |csv|
+          csv << [stock.code.to_s, stock.name.to_s, e.to_s]
+        end
+      end
+    end
+  end
+
+  # 从 谷歌财经 下载 港股 的财务数据
+  # Stock.get_all_hk_stock_info_from_google_between 1,3
+  def self.get_all_hk_stock_info_from_google_between start_id, end_id
+    Stock.where("id >= ? and id <= ?", start_id, end_id).where(stock_type: 2).each do |stock|
       begin
         self.transaction do
           self.get_usa_stock_info_from_google stock.id
@@ -470,8 +489,18 @@ class Stock < ActiveRecord::Base
     balannualdiv = ''
     casannualdiv = ''
     uri = ''
-    ["","NYSE%3A","NYSEMKT%3A","OTCMKTS%3A","TSE%3A"].each do |key|
-      uri = "http://www.google.com/finance?q=#{key}#{stock.code}&fstype=ii"
+    pre_arr = if stock.stock_type == 2
+                ["HKG%3A"]
+              elsif stock.stock_type == 3
+                ["","NYSE%3A","NASDAQ%3A","NYSEMKT%3A","OTCMKTS%3A","TSE%3A"]
+              end
+    q_code = if stock.stock_type == 2
+                stock.code[1..4]
+             elsif stock.stock_type == 3
+                stock.code
+             end
+    pre_arr.each do |key|
+      uri = "http://www.google.com/finance?q=#{key}#{q_code}&fstype=ii"
       response = RestClient.get uri
       doc = Nokogiri::HTML(response)
 
@@ -521,7 +550,7 @@ class Stock < ActiveRecord::Base
         end
 
         c_unit = if item_name.include? 'per Share'
-                   unit.gsub("Millions of ", "").strip
+                   unit.gsub("Millions of ", "").gsub("Thousands of ", "").strip
                  else
                    unit
                  end
@@ -925,6 +954,33 @@ class Stock < ActiveRecord::Base
   end
 
 
+  def self.generate_fcf_by_stock_ids stock_ids, skip_existed=false
+    Stock.where("id in (?)", stock_ids).each do |stock|
+      begin
+        end_year = 2015
+        start_year = stock.stock_type == 3 ? 2013 : 2011
+        trade_date = StockMarketHistory.where(stock_id: stock.id).maximum(:trade_date)
+        raise "股票#{stock.id} #{stock.code} #{stock.name} 没有任何交易价格" if trade_date.blank?
+        price = StockMarketHistory.where(stock_id: stock.id).where(trade_date: trade_date).first
+        raise "股票#{stock.id} #{stock.code} #{stock.name} 没有任何交易价格" if price.blank?
+        date = price.trade_date
+        version = 100
+        Stock.transaction do
+          case stock.stock_type
+            when 3
+              stock.usa_stock_data_from_google_generate_fcf date.to_s, version, skip_existed
+            else
+              stock.generate_fcf start_year, end_year, date, version, skip_existed
+          end
+        end
+      rescue Exception => e
+        CSV.open(Rails.root.join("tmp/970tryfcfagain_error.csv").to_s, "ab") do |csv|
+          csv << [stock.code.to_s, stock.name.to_s, e.to_s]
+        end
+      end
+    end
+  end
+
   def usa_stock_data_from_google_generate_fcf date, version, skip_existed=false
     Stock.transaction do
       sdis = StockDataInfo.where(stock_id: self.id, source: '谷歌财经').order(:quarterly_date)
@@ -932,7 +988,7 @@ class Stock < ActiveRecord::Base
         pp "该股票 #{self.code},#{self.name}在谷歌上没有财经数据"
         return
       end
-      unit = sdis.first.monetary_unit.gsub("Millions of", "M")
+      unit = sdis.first.monetary_unit.gsub("Millions of", "M").gsub("Thousands of", "M")
       quarterly_date_arr = sdis.pluck(:quarterly_date).uniq
       assessments = Assessment.where(stock_id: id, delete_flag: 0)
       return if skip_existed && !assessments.blank?
@@ -1273,7 +1329,11 @@ class Stock < ActiveRecord::Base
         (get_annual_info_by_item_name_and_year '营业额', year).round(2)
       when 3
         value = get_annual_info_by_item_name_and_year 'Total Revenue', year
-        value.round(2)
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
 
   end
@@ -1287,7 +1347,11 @@ class Stock < ActiveRecord::Base
         (get_annual_info_by_item_name_and_year '销售成本', year).round(2)
       when 3
         value = get_annual_info_by_item_name_and_year 'Cost of Revenue, Total', year
-        value.round(2)
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
 
   end
@@ -1305,7 +1369,11 @@ class Stock < ActiveRecord::Base
       when 3
         value1 = get_annual_info_by_item_name_and_year 'Research & Development', year
         value2 = get_annual_info_by_item_name_and_year 'Selling/General/Admin. Expenses, Total', year
-        (value1 + value2).round(2)
+        if id>=2410 && id<=4315
+          ((value1 + value2)/1000).round(2)
+        elsif id>=4316 && id<=13260
+          (value1 + value2).round(2)
+        end
     end
   end
 
@@ -1318,7 +1386,11 @@ class Stock < ActiveRecord::Base
         0
       when 3
         value = get_annual_info_by_item_name_and_year 'Other Operating Expenses, Total', year
-        value.round(2)
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
   end
 
@@ -1346,7 +1418,11 @@ class Stock < ActiveRecord::Base
         (get_annual_info_by_item_name_and_year '现金及银行结存(流动资产)', year).round(2)
       when 3
         value = get_annual_info_by_item_name_and_year 'Cash & Equivalents', year
-        value.round(2)
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
   end
 
@@ -1359,7 +1435,11 @@ class Stock < ActiveRecord::Base
         (get_annual_info_by_item_name_and_year '存货(流动资产)', year).round(2)
       when 3
         value = get_annual_info_by_item_name_and_year 'Total Inventory', year
-        value.round(2)
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
   end
 
@@ -1390,7 +1470,11 @@ class Stock < ActiveRecord::Base
         (get_annual_info_by_item_name_and_year '应付帐款(流动负债)', year).round(2)
       when 3
         value = get_annual_info_by_item_name_and_year 'Accounts Payable', year
-        (value/1000).round(2)
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
   end
 
@@ -1407,7 +1491,11 @@ class Stock < ActiveRecord::Base
         (get_annual_info_by_item_name_and_year '银行贷款(流动负债)', year).round(2)
       when 3
         value1 = get_annual_info_by_item_name_and_year 'Notes Payable/Short Term Debt', year
-        value1.round(2)
+        if id>=2410 && id<=4315
+          (value1/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value1.round(2)
+        end
     end
   end
 
@@ -1420,7 +1508,11 @@ class Stock < ActiveRecord::Base
         0
       when 3
         value = get_annual_info_by_item_name_and_year 'Long Term Debt', year
-        value.round(2)
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
   end
 
@@ -1452,8 +1544,12 @@ class Stock < ActiveRecord::Base
       when 2
         (get_annual_info_by_item_name_and_year '折旧', year).round(2)
       when 3
-        value1 = get_annual_info_by_item_name_and_year "Depreciation/Depletion", year
-        value1.round(2)
+        value = get_annual_info_by_item_name_and_year "Depreciation/Depletion", year
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
   end
 
@@ -1476,8 +1572,12 @@ class Stock < ActiveRecord::Base
         end
 
       when 3
-        value1 = get_annual_info_by_item_name_and_year "Changes in Working Capital", year
-        value1.round(2)
+        value = get_annual_info_by_item_name_and_year "Changes in Working Capital", year
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
   end
 
@@ -1490,7 +1590,11 @@ class Stock < ActiveRecord::Base
         -(get_annual_info_by_item_name_and_year '购置固定资产款项', year).round(2)
       when 3
         value = -(get_annual_info_by_item_name_and_year 'Capital Expenditures', year)
-        value.round(2)
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
   end
 
@@ -1600,11 +1704,19 @@ class Stock < ActiveRecord::Base
       when 3
         sdis = StockDataInfo.where(stock_id: self.id, source: '谷歌财经').order(:stock_data_item_id, :quarterly_date).limit(4)
         unit = sdis.first.monetary_unit.gsub("Millions of", "").strip
-        response = RestClient.get "http://apis.baidu.com/apistore/currencyservice/currency?fromCurrency=#{unit}&toCurrency=USD&amount=1", {:apikey => '3944403610171942d0bc91b9c45e74b4'}
-        response = response.body
-        response = JSON.parse response
-        raise "#{unit} 转换成 USD失败" if response["errNum"] == -1
-        (1/response["retData"]["convertedamount"]).round(2)
+        if id>=2410 && id<=4315
+          response = RestClient.get "http://apis.baidu.com/apistore/currencyservice/currency?fromCurrency=#{unit}&toCurrency=CNY&amount=1", {:apikey => '3944403610171942d0bc91b9c45e74b4'}
+          response = response.body
+          response = JSON.parse response
+          raise "#{unit} 转换成 CNY失败" if response["errNum"] == -1
+          (1/response["retData"]["convertedamount"]).round(2)
+        elsif id>=4316 && id<=13260
+          response = RestClient.get "http://apis.baidu.com/apistore/currencyservice/currency?fromCurrency=#{unit}&toCurrency=USD&amount=1", {:apikey => '3944403610171942d0bc91b9c45e74b4'}
+          response = response.body
+          response = JSON.parse response
+          raise "#{unit} 转换成 USD失败" if response["errNum"] == -1
+          (1/response["retData"]["convertedamount"]).round(2)
+        end
     end
   end
 
@@ -1633,7 +1745,11 @@ class Stock < ActiveRecord::Base
         ((get_annual_info_by_item_name_and_year '股份数目(香港)', year)/1000000.0).round(2)
       when 3
         value = get_annual_info_by_item_name_and_year 'Total Common Shares Outstanding', year
-        value.round(2)
+        if id>=2410 && id<=4315
+          (value/1000).round(2)
+        elsif id>=4316 && id<=13260
+          value.round(2)
+        end
     end
   end
 
@@ -1649,6 +1765,7 @@ class Stock < ActiveRecord::Base
   end
 
   def calc_per_share_value_100 start_year, end_year
+    # TODO 新浪港股分析FCF有问题，这个地方，暂时不考虑
     (calc_equity_value_100(start_year, end_year)/calc_shares_outstanding_100(end_year)/calc_exchange_rate_100).round(5)
   end
 

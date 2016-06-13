@@ -200,6 +200,36 @@ class StockMarketHistory < ActiveRecord::Base
     end
   end
 
+  def self.batch_download_usa_stock_trade_info_from_google stock_ids
+    stock_ids.each do |stock_id|
+      begin
+        self.download_usa_stock_trade_info_from_google stock_id
+      rescue Exception => e
+        CSV.open(Rails.root.join("tmp/970usastockdown_trade_price_error.csv").to_s, "ab") do |csv|
+          stock = Stock.find stock_id
+          csv << [stock.code.to_s, stock.name.to_s, e.to_s]
+        end
+      end
+    end
+  end
+
+  def self.download_usa_stock_trade_info_from_google stock_id
+    stock = Stock.find stock_id
+    uri = "http://www.google.com/finance/historical?q=NYSE%3A#{stock.code}&ei=WTpeV9mON43tsgGc5a6QCQ"
+    response = RestClient.get uri
+    doc = Nokogiri::HTML(response)
+    doc.at_css(".gf-table.historical_price").css("tr").each_with_index do |tr, index|
+      next if index == 0
+      StockMarketHistory.find_or_create_by!  stock_id: stock_id,
+                                             trade_date: tr.css("td")[0].content.strip.to_date,
+                                             open_price: tr.css("td")[1].content.strip,
+                                             peak_price: tr.css("td")[2].content.strip,
+                                             bottom_price: tr.css("td")[3].content.strip,
+                                             close_price: tr.css("td")[4].content.strip,
+                                             trade_volume: tr.css("td")[5].content.strip
+    end
+  end
+
 
   # 获得某只美股的历史数据
   # StockMarketHistory.download_usa_stock_trade_info 4985
