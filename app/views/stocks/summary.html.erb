@@ -1,7 +1,7 @@
 <h3><%= "#{@stock.name}(#{@stock.code})" %></h3>
 <% assessment = @stock.assessments.valid.first %>
 <%
-   sdis = StockDataInfo.where(stock_id: @stock.id, source: '谷歌财经').order(:quarterly_date)
+   sdis = StockDataInfo.where(stock_id: @stock.id, source: '谷歌财经').order(:quarterly_date).select{|x|x.monetary_unit.include? 'Millions of'}
    common_unit = sdis.first.monetary_unit.gsub("Millions of", "M")
 %>
 <table>
