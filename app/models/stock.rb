@@ -1315,7 +1315,11 @@ class Stock < ActiveRecord::Base
 
     stock_data_info = stock_data_infos.first
 
-    stock_data_info.value
+    if stock_type == 3 && stock_data_info.source == "雅虎财经"
+      stock_data_info.value/1000
+    else
+      stock_data_info.value
+    end
   end
 
 
